@@ -1,0 +1,13 @@
+{
+  "name": "bcenv",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "prepare": "husky",
+    "check:prompts": "node scripts/check-prompts.mjs",
+    "test": "node --test scripts/check-prompts.test.mjs"
+  },
+  "devDependencies": {
+    "husky": "9.1.7"
+  }
+}
