@@ -8,7 +8,7 @@ bcenv aims to give an AI agent the tools and feedback it needs to go from a new 
 
 This project is in its initial design stage. There is no implementation or runnable environment yet. The capabilities below describe the intended direction, not features that are currently available.
 
-See [VISION.md](VISION.md) for the long-term objective, scope, and measures of success.
+See [VISION.md](VISION.md) for the long-term objective, scope, and measures of success. Draft research and architecture proposals are in [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md) and [INITIAL_DESIGN_SKETCH.md](INITIAL_DESIGN_SKETCH.md).
 
 ## Planned workflow
 
