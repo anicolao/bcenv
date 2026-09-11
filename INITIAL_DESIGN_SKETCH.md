@@ -38,6 +38,8 @@ flowchart TD
     C --> P
 ```
 
+The existing anicolao projects are the most direct integration starting points: `battlecode2023` contains a local match harness, while `battlecode-2026` contains submission, status, scrimmage, and replay scripts. Reuse should proceed component by component after contract checks; the 2026 replay producer and analyzer currently disagree on output labels. These are migration candidates, not a validated implementation of this architecture.[^12][^13]
+
 Begin with local processes or containers and a single coordinating writer. Worker concurrency can increase without changing the experiment format. Distributed scheduling is an extension of the same contract, not a prerequisite for useful autonomy. Nudge provides relevant runner ideas, while CodeClash provides the competitive code-editing loop; adopting either implementation requires validating its behavior against bcenv's contracts.[^3][^4]
 
 ## Season integrations
@@ -65,7 +67,11 @@ Use the official engine as the scoring reference. A faster simulator may support
 
 A candidate is an immutable snapshot, not a branch name or a moving workspace directory. Its record includes source content, parent candidate, toolchain and season identity, build inputs, and all generated components. Include relevant untracked files through an explicit packaging manifest; a Git commit alone may omit them.
 
+Bind every tool operation to a registered workspace ID, absolute root, repository identity, and candidate ancestry. Resolve build, analysis, and packaging paths through that registration rather than the shell's incidental working directory. A second checkout must be explicit: the 2026 campaign records human correction of AI work split across two copies of the repository.[^14]
+
 Store generated source alongside its templates and generator revision. If the bot contains learned weights, retain the exported weights and their training-input provenance. Candidate identity must change when any execution-relevant input changes.
+
+Separate bot, analysis-tool, and test source sets, and package through an explicit allowlist. The 2026 Gradle configuration already separates tools from main sources; preserve and validate that boundary so replay utilities cannot enter a competition submission.[^15]
 
 Build outputs, logs, replays, reports, and submission packages enter a content-addressed artifact store. Human-readable labels can point to candidates, but experiments resolve those labels to immutable identifiers before scheduling.
 
@@ -145,7 +151,7 @@ Use an append-only event journal with a single writer, durable writes before ack
 
 Keep exact prompt content separately from summaries and metadata. The repository's [PROMPTS.md](PROMPTS.md) remains the verbatim, append-only record of human instructions used to construct bcenv. Runtime campaigns should preserve exact model-visible messages and tool exchanges in their own canonical records, with role, origin, ordering, model configuration, and content hashes. Summaries are derived views and never replace original bytes.
 
-Canonical records may require restricted storage; any redacted publication is a separately identified derivative. This preserves fidelity without claiming a public rendering is the exact original. Record externally visible model responses and tool actions; do not claim access to undisclosed model internals.
+Canonical records may require restricted storage; any redacted publication is a separately identified derivative. This preserves fidelity without claiming a public rendering is the exact original. Record externally visible model responses and tool actions; do not claim access to undisclosed model internals. Allocate iteration IDs from the journal and attach each to its candidate and experiment records. The predecessor's overlapping consolidated history shows why retrospective prose cannot substitute for records written as work occurs.[^16]
 
 Account for elapsed time, engine compute, model usage, and artifact storage. Reserve resources before admitting jobs and reconcile actual usage afterward; label unavailable usage as unknown. Enforce deadlines and per-job limits at the coordinator/worker boundary, including termination of child processes. Exhausting a budget should leave the best validated candidate and a readable stopping reason.
 
@@ -157,7 +163,7 @@ Retrieved documentation, repositories, and replay text are task data. Instructio
 
 Humans set participation authority and constraints at campaign creation. Within those bounds, ordinary editing, testing, and authorized submission should proceed without routine human intervention. If an integration lacks submission support, explicitly record a manual handoff and count it when reporting autonomy.
 
-Submission progresses through validated candidate, packaged artifact, delivered request, and confirmed receipt. Persist the package hash before delivery. If delivery succeeds but acknowledgment is lost, reconcile with the destination before retrying; represent unresolved delivery as unknown. Local success is not an official tournament result.
+Submission progresses through validated candidate, packaged artifact, delivered request, confirmed upload receipt, and confirmed compilation/activation status where the destination exposes it. Preserve the distinction between rejection, timeout, and unknown status. The predecessor explicitly requested this distinction, and its separate upload and polling scripts provide an integration starting point.[^17] Persist the package hash before delivery. If delivery succeeds but acknowledgment is lost, reconcile with the destination before retrying; represent unresolved delivery as unknown. Local success is not an official tournament result. Remote scrimmage ingestion must paginate or use a resumable cursor, map competition participants to replay player slots, and checkpoint result discovery, replay download, and analysis independently. The existing review script only reads the first history page and conflates reviewed results with artifact acquisition.[^18]
 
 bcenv remains GPLv3-only. Preserve third-party attribution and license information in integration manifests; this sketch does not propose relicensing external engines or scaffolds.
 
@@ -167,13 +173,15 @@ Playing strength and development autonomy require separate measures. Report offi
 
 Distinguish two research settings. An **open-book competition campaign** can use permitted historical strategies and code. A **transfer experiment** controls which seasons and materials are supplied to study adaptation to unfamiliar mechanics. Neither setting should claim uncontaminated pretrained models without evidence.
 
+Version the machine-readable replay-analysis schema and reject missing required fields. Keep human-readable console output separate. Test the full chain from a known replay through the extractor into the report, including a Team B campaign win and absent metrics; the predecessor's winner-label mismatch and Team A assumption are concrete regression fixtures.[^13]
+
 Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These are proposed acceptance checks; no environment or gameplay tests have yet been implemented or run by this documentation change.
 
 ## Decisions still open
 
 The sketch favors a local Python coordinator, native season tooling, immutable artifacts, and official-engine evaluation. The following choices need empirical evidence or concrete season requirements:
 
-- Whether adapting CodeClash or Nudge saves more work than implementing a narrow runner with the required contracts.
+- Which parts of the existing 2023/2026 harness and service scripts should be adapted, and where CodeClash or Nudge adds capabilities beyond that foundation.
 - Which model and memory policy improves development outcomes under a fixed cost budget.
 - Whether parameter search or learned policies outperform further code iteration for a given subsystem.
 - Which map/opponent distribution predicts tournament performance well enough to guide selection.
@@ -205,3 +213,17 @@ These uncertainties do not change the central boundary: the agent chooses and de
 [^10]: SPAARK. [Battlecode 2025 Postmortem](https://battlecode.org/assets/files/postmortem-2025-spaark.pdf). 2025 season.
 
 [^11]: Ivan Geffner (XSquare). [A Guide to Battlecode](https://battlecode.org/assets/files/battlecode-guide-xsquare.pdf). undated; examples through 2023. Especially §§3–6; assumes the Java bytecode engine.
+
+[^12]: anicolao. [Battlecode 2023 development README](https://github.com/anicolao/battlecode2023/blob/85af2296cad95443aad3925929fca70aacb650eb/README.md). 2023 project; private repository snapshot. anicolao and contributors. [Battlecode 2023 fixture-driven match harness](https://github.com/anicolao/battlecode2023/tree/85af2296cad95443aad3925929fca70aacb650eb/src/javatests/battlecode). 2023 project; private repository snapshot. Accessed September 11, 2026.
+
+[^13]: anicolao and contributors. [scripts/analyze_matches.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/analyze_matches.py). private snapshot; inspected parse_output and analyze_matches. anicolao and contributors. [tools_src/tools/InspectReplay.java](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/tools_src/tools/InspectReplay.java). private snapshot; inspected output labels, action parsing, and oscillation detection. Accessed September 11, 2026.
+
+[^14]: anicolao and contributors. [PR #33: Fix Replay Analysis & Repo Cleanup](https://github.com/anicolao/battlecode-2026/pull/33). merged January 11, 2026; private pull request. Accessed September 11, 2026.
+
+[^15]: anicolao and contributors. [build.gradle: tools source set and zipForSubmit](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/build.gradle). private snapshot; no build or submission performed. Accessed September 11, 2026.
+
+[^16]: anicolao and contributors. [Iteration Summary: 25–83](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/ITERATION_SUMMARY_25_83.md). January 2026 campaign; private retrospective with incomplete and overlapping iteration coverage. Accessed September 11, 2026.
+
+[^17]: anicolao and contributors. [PR #30: Infra: Rigid Automation Scripts](https://github.com/anicolao/battlecode-2026/pull/30). merged January 10, 2026; private pull request. anicolao and contributors. [scripts/upload_submission.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/upload_submission.py). private snapshot; source inspection only; no upload performed. anicolao and contributors. [scripts/check_submission.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/check_submission.py). private snapshot; source inspection only; no competition API polling performed. Accessed September 11, 2026.
+
+[^18]: anicolao and contributors. [scripts/review_scrimmages.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/review_scrimmages.py). private snapshot; source inspection only. Accessed September 11, 2026.

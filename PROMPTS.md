@@ -45,3 +45,9 @@ Let's create the github repository and put this up as PR#1.
 ```text
 OK that is rebased and merged. Let's start a new long-running research effort to try to summarize past approaches to battlecode and past approaches to usign AI to compete in battle code. Write HISTORICAL_LEARNINGS.md based upon all the examples you can find. Then write INITIAL_DESIGN_SKETCH to specify what you think the design of bcenv should be. Put up these draft documents as the next PR for review.
 ```
+
+## Prompt 8: Expand research through my repositories
+
+```text
+review all of my repositories for battlecode related work and any repositories tehy refer to to expand your research.
+```
