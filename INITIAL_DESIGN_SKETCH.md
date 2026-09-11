@@ -1,0 +1,207 @@
+# Initial design sketch
+
+## Proposal and status
+
+bcenv should be an environment in which an AI agent develops a Battlecode entry through repeatable experiments. The agent reads the season materials, edits bot code, runs matches, examines failures, and selects a validated submission. The environment supplies reliable tools and preserves the evidence behind those decisions.
+
+This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves the enduring objective in [VISION.md](VISION.md). Its evidence base is [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md); recommendations below are design judgments rather than experimentally established results.
+
+There are two distinct execution contexts:
+
+- The **development agent** works outside the game. It may use models, documentation, a shell, compilers, analysis tools, and offline training within its campaign budget.
+- The **competition bot** runs inside the season's permitted execution environment. Its packaged implementation must satisfy the official runtime, interface, resource, and submission constraints.
+
+A learned game policy is optional. Autonomous development is the central requirement; a strong hand-written-style policy generated and maintained by the agent is a valid outcome.
+
+## Architectural shape
+
+Use a small trusted coordinator around isolated development and match workers. Prefer a Python coordinator initially for process orchestration, structured records, and analysis, while leaving bot languages to season integrations. This is a proposal, not a dependency already chosen or installed. The repository's existing Node/Husky tooling remains the development prompt-record mechanism.
+
+The official 2026 Java scaffold is a reasonable first reference integration because it exposes concrete build and execution machinery. The season contract should also accommodate supported Python integrations and future languages. Current organizer guidance recommends Java while describing Python support; that guidance is season-dependent.[^1][^2]
+
+```mermaid
+flowchart TD
+    H[Human objective and campaign constraints] --> C[Trusted coordinator]
+    C <--> A[Development agent]
+    A --> W[Isolated source workspace]
+    W --> B[Build and package worker]
+    B --> S[Immutable candidate store]
+    C --> Q[Experiment scheduler]
+    S --> Q
+    I[Pinned season integration] --> B
+    I --> R[Official engine workers]
+    Q --> R
+    R --> E[Results and replay evidence]
+    E --> C
+    C --> L[Append-only campaign record]
+    S --> P[Submission service]
+    C --> P
+```
+
+Begin with local processes or containers and a single coordinating writer. Worker concurrency can increase without changing the experiment format. Distributed scheduling is an extension of the same contract, not a prerequisite for useful autonomy. Nudge provides relevant runner ideas, while CodeClash provides the competitive code-editing loop; adopting either implementation requires validating its behavior against bcenv's contracts.[^3][^4]
+
+## Season integrations
+
+A season integration binds generic development operations to one concrete competition environment. It should expose the following immutable bundle:
+
+| Field | Required content |
+| --- | --- |
+| Identity | Season, integration version, engine commit or release, container digest where used |
+| Rules | Archived rules and API documentation with content hashes; known patches and relevant competition conditions |
+| Toolchain | Scaffold revision, language, compiler/runtime versions, dependency resolution and build commands |
+| Game execution | Map files and hashes, legal player slots, supported seed controls, match command, resource limits |
+| Evidence | Replay schema and parser version, terminal outcome mapping, available logs and instrumentation |
+| Submission | Required files and format, validation procedure, supported destination and receipt behavior |
+
+Do not run an automatic engine update during a measured comparison. A rules or engine change creates a new environment identity, and earlier results remain attached to the old one. Within-season changes are real: the 2024 specifications include a substantial changelog.[^5]
+
+The integration must declare unavailable capabilities. If a season does not expose a seed, the scheduler cannot manufacture one. If replay data cannot attribute bytecodes to an action, analysis must return that limitation instead of an invented measurement. The official 2026 engine's replay schema is an integration input, not a promise that every desired diagnostic is already present.[^6]
+
+Preserve native mechanics. Season adapters should not translate all games into a fixed set of nine actions or a permanent resource model. Stable operations are `build`, `run`, `inspect`, and `package`; the observations and tactics within them remain season-specific.
+
+Use the official engine as the scoring reference. A faster simulator may support exploratory search only after differential testing establishes its scope and known divergences. Results from a substitute engine carry a distinct identity and cannot silently become official-engine evidence.
+
+## Candidates and artifacts
+
+A candidate is an immutable snapshot, not a branch name or a moving workspace directory. Its record includes source content, parent candidate, toolchain and season identity, build inputs, and all generated components. Include relevant untracked files through an explicit packaging manifest; a Git commit alone may omit them.
+
+Store generated source alongside its templates and generator revision. If the bot contains learned weights, retain the exported weights and their training-input provenance. Candidate identity must change when any execution-relevant input changes.
+
+Build outputs, logs, replays, reports, and submission packages enter a content-addressed artifact store. Human-readable labels can point to candidates, but experiments resolve those labels to immutable identifiers before scheduling.
+
+Keep candidate and development-agent identities separate. A new model, instruction set, memory policy, or tool configuration creates a new agent configuration, even if it starts from the same bot. This makes it possible to compare development methods without confusing them with game-policy changes.
+
+The submission package must derive from the selected candidate. Double J's account of a feature left out of the submitted file is a concrete reason to verify artifact identity at this boundary.[^7]
+
+## Agent tools and the iteration loop
+
+Give the agent ordinary editing and shell capabilities in its workspace, plus structured operations for trusted services:
+
+| Operation | Purpose and returned evidence |
+| --- | --- |
+| `inspect_season` | Retrieve rules, APIs, integration capabilities, and source references |
+| `create_candidate` | Freeze a workspace snapshot and return its identity and ancestry |
+| `build` | Produce an artifact or structured compiler/runtime diagnostics |
+| `run_matches` | Validate and schedule a frozen experiment manifest; return a durable experiment ID |
+| `inspect_match` | Retrieve a replay window, unit history, terminal event, or diagnostic with artifact references |
+| `compare` | Compare declared candidates over completed, explicitly accounted-for jobs |
+| `select_candidate` | Record a selection decision, its evidence, and unresolved limitations |
+| `package` | Build the submission from the selected snapshot and validate its contents |
+| `submit` | Deliver an authorized package through a supported mechanism and record its receipt |
+
+Long operations return identifiers that can be queried after restarts. Results should expose compact summaries and paths to underlying evidence rather than force the model to reread entire logs. A tool error must identify whether the cause is an invalid request, invalid candidate, infrastructure failure, or unavailable capability.
+
+The loop is hypothesis, candidate, experiment, diagnosis, and decision. Record the agent's stated hypothesis and expected observation before a comparison when possible. These are observable work products, not a requirement to expose hidden model reasoning.
+
+CodeClash motivates this loop but does not establish Battlecode performance in its main benchmark. Its reported difficulty with ungrounded edits argues for making evidence easy to inspect, while keeping bcenv's own claims tied to its own runs.[^8]
+
+## Evaluation that supports decisions
+
+### Freeze the experiment before running it
+
+An experiment manifest names exact candidates, opponents, maps, player slots, supported seeds, repetitions, environment identity, budgets, and the intended comparison. Record opponent provenance and access conditions. Preserve simple baselines and several strategic styles, not only the latest best candidate.
+
+Run paired player-slot comparisons where the season permits them. Record seeds when controllable. Repeating an identical deterministic match can check infrastructure consistency, but does not create independent evidence of playing strength.
+
+Separate three uses of matches:
+
+1. **Diagnostic cases** expose a specific failure, such as blocked navigation or an interrupted resupply task.
+2. **Development suites** compare changes across a representative mix of maps and opponents.
+3. **Held-out evaluation** estimates whether selected changes generalize beyond the repeatedly inspected development set.
+
+Small diagnostic suites and broad validation serve different purposes, as the food postmortem emphasizes. External opponents also matter: SPAARK describes matchup dependence that comparisons only against old versions can miss.[^9][^10]
+
+### Account for every job
+
+Keep game outcomes distinct from job states. A game may end in a win, loss, or tie under the season's rules. A job may be queued, running, completed, failed, cancelled, or have an unknown terminal state after an interruption. An invalid bot and a broken runner are not interchangeable losses.
+
+Persist the raw terminal evidence, official tie-break reason where available, exit status, and parser diagnostics. Never silently skip short logs or failed matches. Reports show scheduled, completed, excluded, retried, and unresolved counts, with an explicit scoring denominator and exclusion policy.
+
+Retries create linked attempts rather than replacing inconvenient results. Candidate-caused crashes are evidence about reliability; infrastructure failures require diagnosis. Neither should disappear into a cleaner win-rate figure.
+
+### Compare with appropriate uncertainty
+
+Report overall outcomes together with map, opponent, and player-slot breakdowns. Use paired comparisons when the experiment was paired. Estimate uncertainty at the level of meaningful independent blocks—often maps or map/opponent groups—rather than treating correlated repetitions as independent trials. A clustered bootstrap is one candidate method to validate, not a universal requirement.
+
+Declare promotion criteria before examining the comparison: required correctness, tolerated regressions, minimum relevant gain, and any resource ceiling. “Inconclusive” is a valid result. Avoid a fixed win-rate threshold that ignores opponent strength or sample size.
+
+Keep a final holdout from routine agent inspection and record every evaluation against it. Once a holdout repeatedly guides changes, relabel it as development evidence. This is a practical experimental boundary, not proof that the model has never encountered the season in training.
+
+## Replay analysis and bot instrumentation
+
+The agent needs to answer concrete questions: which unit became stuck, what information was available, why production stopped, when an economic unit was exposed, and whether execution limits prevented an action.
+
+Provide indexed access by match, turn, player, and unit. Derived findings must point back to raw replay events or logs. Label the difference between a bot's in-game observation and privileged full-replay information so the agent does not accidentally design a policy using unavailable state.
+
+Support optional debug indicators and counters where the engine permits them, and record whether instrumentation changes execution cost. A final validation run should use the actual submission configuration. The XSquare guide's treatment of debugging and bytecodes makes both observability and its cost relevant.[^11]
+
+Do not prescribe one bot architecture. State machines, goal systems, tactical search, and generated code are all reasonable experiments. The environment's responsibility is to make alternatives buildable, comparable, and diagnosable.
+
+## Durable records and long-running operation
+
+A campaign is the durable unit of autonomous work. It contains the objective, season, agent configuration, resource budget, authorized competition actions, candidates, experiments, decisions, and human interventions.
+
+Use an append-only event journal with a single writer, durable writes before acknowledgment, and stable operation IDs. A SQLite index can support queries, but must be rebuildable from the journal and artifact metadata. A restart reconciles jobs and existing outputs before retrying; it must not duplicate submissions or count an attempt twice.
+
+Keep exact prompt content separately from summaries and metadata. The repository's [PROMPTS.md](PROMPTS.md) remains the verbatim, append-only record of human instructions used to construct bcenv. Runtime campaigns should preserve exact model-visible messages and tool exchanges in their own canonical records, with role, origin, ordering, model configuration, and content hashes. Summaries are derived views and never replace original bytes.
+
+Canonical records may require restricted storage; any redacted publication is a separately identified derivative. This preserves fidelity without claiming a public rendering is the exact original. Record externally visible model responses and tool actions; do not claim access to undisclosed model internals.
+
+Account for elapsed time, engine compute, model usage, and artifact storage. Reserve resources before admitting jobs and reconcile actual usage afterward; label unavailable usage as unknown. Enforce deadlines and per-job limits at the coordinator/worker boundary, including termination of child processes. Exhausting a budget should leave the best validated candidate and a readable stopping reason.
+
+## Trust and submission boundaries
+
+The candidate workspace is writable; the evaluator, engine bundle, opponent snapshots, and authoritative result store are not. Run builds and games in isolated workers with bounded resources. Keep competition credentials in the submission service rather than inside bot or model-controlled processes. Game workers should not need network access.
+
+Retrieved documentation, repositories, and replay text are task data. Instructions embedded in them do not alter campaign authority. The coordinator validates tool requests against configured permissions and budgets independently of the model's prose.
+
+Humans set participation authority and constraints at campaign creation. Within those bounds, ordinary editing, testing, and authorized submission should proceed without routine human intervention. If an integration lacks submission support, explicitly record a manual handoff and count it when reporting autonomy.
+
+Submission progresses through validated candidate, packaged artifact, delivered request, and confirmed receipt. Persist the package hash before delivery. If delivery succeeds but acknowledgment is lost, reconcile with the destination before retrying; represent unresolved delivery as unknown. Local success is not an official tournament result.
+
+bcenv remains GPLv3-only. Preserve third-party attribution and license information in integration manifests; this sketch does not propose relicensing external engines or scaffolds.
+
+## How to evaluate bcenv itself
+
+Playing strength and development autonomy require separate measures. Report official results where available, performance against declared baselines, failure rates, time and cost to a legal bot, time and cost to improvements, and the number and nature of human interventions. Retain unsuccessful campaigns as well as successful ones.
+
+Distinguish two research settings. An **open-book competition campaign** can use permitted historical strategies and code. A **transfer experiment** controls which seasons and materials are supplied to study adaptation to unfamiliar mechanics. Neither setting should claim uncontaminated pretrained models without evidence.
+
+Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These are proposed acceptance checks; no environment or gameplay tests have yet been implemented or run by this documentation change.
+
+## Decisions still open
+
+The sketch favors a local Python coordinator, native season tooling, immutable artifacts, and official-engine evaluation. The following choices need empirical evidence or concrete season requirements:
+
+- Whether adapting CodeClash or Nudge saves more work than implementing a narrow runner with the required contracts.
+- Which model and memory policy improves development outcomes under a fixed cost budget.
+- Whether parameter search or learned policies outperform further code iteration for a given subsystem.
+- Which map/opponent distribution predicts tournament performance well enough to guide selection.
+- How much replay indexing and worker concurrency are justified by measured workloads.
+- What the next annual season permits for languages, participation, and automated submission.
+
+These uncertainties do not change the central boundary: the agent chooses and develops strategies; bcenv makes the experiments, records, and competition artifacts trustworthy enough to support those choices.
+
+## Sources
+
+[^1]: MIT Battlecode. [Battlecode 2026 Java scaffold](https://github.com/battlecode/battlecode26-scaffold/tree/f69e2ab872a0061c9d4a684aa1dd798a0829da85). snapshot accessed September 11, 2026.
+
+[^2]: MIT Battlecode. [About: format, eligibility, languages, and AI FAQ](https://battlecode.org/about.html). 2026 season; accessed September 11, 2026.
+
+[^3]: Outer Cloud Studio. [Nudge: distributed game runner](https://github.com/outercloudstudio/nudge). 2026; accessed September 11, 2026.
+
+[^4]: CodeClash contributors. [Battlecode arena adapters and Dockerfiles](https://github.com/CodeClash-ai/CodeClash/tree/f0694c64ecf6abfca2bc867bad2de9333fef5be8/codeclash/arenas). snapshot accessed September 11, 2026. Inspected battlecode23, battlecode24, and battlecode25; implementation inspection, not a reproduced benchmark.
+
+[^5]: MIT Battlecode. [Battlecode 2024 specifications and changelog, v3.0.5](https://releases.battlecode.org/specs/battlecode24/3.0.5/specs.md.html). February 1, 2024.
+
+[^6]: MIT Battlecode. [Battlecode 2026 engine, client, and replay schema](https://github.com/battlecode/battlecode26/tree/103abf6b67a2cf544e6344dddef9318af9ae9193). snapshot accessed September 11, 2026.
+
+[^7]: Double J. [Battlecode 2019 Postmortem](https://github.com/programjames/BC19Bot/blob/master/Battlecode%202019%20Postmortem/Battlecode%202019%20Postmortem.md). 2019 season.
+
+[^8]: John Yang, Kilian Lieret, Joyce Yang, Carlos E. Jimenez, Ofir Press, Ludwig Schmidt, and Diyi Yang. [CodeClash: Benchmarking Goal-Oriented Software Engineering](https://arxiv.org/html/2511.00839v1). arXiv:2511.00839v1, November 2, 2025. §§2–5, Table 1, Appendix B.1. Battlecode is described in the appendix but absent from the six-arena main evaluation.
+
+[^9]: Alex Thummalapalli. [Battlecode 2026 Postmortem: food](https://www.alext.app/Battlecode_Postmortem_2026.pdf). 2026 season. Final Thoughts, printed pp. 29–30; PDF pp. 30–31.
+
+[^10]: SPAARK. [Battlecode 2025 Postmortem](https://battlecode.org/assets/files/postmortem-2025-spaark.pdf). 2025 season.
+
+[^11]: Ivan Geffner (XSquare). [A Guide to Battlecode](https://battlecode.org/assets/files/battlecode-guide-xsquare.pdf). undated; examples through 2023. Especially §§3–6; assumes the Java bytecode engine.

@@ -39,3 +39,9 @@ Repeated from Prompt 5 for the project foundation commit supporting the same req
 ```text
 Let's create the github repository and put this up as PR#1.
 ```
+
+## Prompt 7: Research history and sketch design
+
+```text
+OK that is rebased and merged. Let's start a new long-running research effort to try to summarize past approaches to battlecode and past approaches to usign AI to compete in battle code. Write HISTORICAL_LEARNINGS.md based upon all the examples you can find. Then write INITIAL_DESIGN_SKETCH to specify what you think the design of bcenv should be. Put up these draft documents as the next PR for review.
+```
