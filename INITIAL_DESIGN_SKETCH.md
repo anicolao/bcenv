@@ -2,47 +2,114 @@
 
 ## Proposal and status
 
-bcenv should be an environment in which an AI agent develops a Battlecode entry through repeatable experiments. The agent reads the season materials, edits bot code, runs matches, examines failures, and selects a validated submission. The environment supplies reliable tools and preserves the evidence behind those decisions.
+bcenv should provide a reproducible, isolated environment for **two levels of AI work**: an outer supervisor that organizes a competition campaign, and inner development agents that each build a Battlecode competitor. The supervisor provisions their machines, prepares the season, starts and monitors their development loops, evaluates their artifacts, and reports outcomes to the human.
 
-This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves the enduring objective in [VISION.md](VISION.md). Its evidence base is [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md); recommendations below are design judgments rather than experimentally established results.
+The proposed deployment unit is a **NixOS VM image**, deployable to a provider such as Google Compute Engine (GCE). Each competitor VM uses Nix to provide its development tools, clones the selected Battlecode repository at a recorded revision, and runs its LLM agent harness inside that environment. The supervisor runs in its own isolated VM or container. This gives bcenv a concrete framework in which to develop its own infrastructure as well as competitive bots.
 
-There are two distinct execution contexts:
+This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves [VISION.md](VISION.md) and draws on [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md). The image definitions, provider adapter, and agent services described here remain to be implemented.
 
-- The **development agent** works outside the game. It may use models, documentation, a shell, compilers, analysis tools, and offline training within its campaign budget.
-- The **competition bot** runs inside the season's permitted execution environment. Its packaged implementation must satisfy the official runtime, interface, resource, and submission constraints.
+## VM and container architecture
 
-A learned game policy is optional. Autonomous development is the central requirement; a strong hand-written-style policy generated and maintained by the agent is a valid outcome.
+### Supervisor, competitors, and evaluation
 
-## Architectural shape
+The environment has three operational boundaries:
 
-Use a small trusted coordinator around isolated development and match workers. Prefer a Python coordinator initially for process orchestration, structured records, and analysis, while leaving bot languages to season integrations. This is a proposal, not a dependency already chosen or installed. The repository's existing Node/Husky tooling remains the development prompt-record mechanism.
-
-The official 2026 Java scaffold is a reasonable first reference integration because it exposes concrete build and execution machinery. The season contract should also accommodate supported Python integrations and future languages. Current organizer guidance recommends Java while describing Python support; that guidance is season-dependent.[^1][^2]
+| Environment | What runs there | Responsibility |
+| --- | --- | --- |
+| **Supervisor VM or container** | Outer LLM agent, trusted coordinator service, provider integration, campaign journal | Prepare season configurations; create, start, monitor, recover, and stop competitor VMs; schedule independent evaluation; report to the human |
+| **Competitor NixOS VM**, one per competitor | Inner LLM agent harness, Nix development environment, Battlecode checkout, build and analysis tools | Understand the game, develop strategies, edit code, run development matches, inspect failures, and produce immutable candidates |
+| **Evaluation workers** | Pinned official engine, frozen candidate/opponent artifacts, trusted result collector | Run comparisons without giving competitor agents control over scoring or opponents; return results and replay evidence |
 
 ```mermaid
 flowchart TD
-    H[Human objective and campaign constraints] --> C[Trusted coordinator]
-    C <--> A[Development agent]
-    A --> W[Isolated source workspace]
-    W --> B[Build and package worker]
-    B --> S[Immutable candidate store]
-    C --> Q[Experiment scheduler]
-    S --> Q
-    I[Pinned season integration] --> B
-    I --> R[Official engine workers]
-    Q --> R
-    R --> E[Results and replay evidence]
-    E --> C
-    C --> L[Append-only campaign record]
-    S --> P[Submission service]
-    C --> P
+    H[Human objective, budget, and participation authority]
+    subgraph S[Isolated supervisor VM or container]
+        O[Outer LLM supervisor]
+        C[Trusted coordinator and provider adapter]
+        J[Campaign journal and reporting]
+        O <--> C
+        C --> J
+    end
+    H --> O
+    J --> H
+    C -->|Provision and configure| V1
+    C -->|Provision and configure| V2
+    subgraph V1[Competitor A - NixOS VM]
+        N1[Nix tooling and pinned Battlecode checkout]
+        A1[Inner LLM development agent]
+        D1[Edit, build, match, and inspect loop]
+        N1 --> A1
+        A1 <--> D1
+    end
+    subgraph V2[Competitor B - NixOS VM]
+        N2[Nix tooling and pinned Battlecode checkout]
+        A2[Inner LLM development agent]
+        D2[Edit, build, match, and inspect loop]
+        N2 --> A2
+        A2 <--> D2
+    end
+    D1 -->|Candidates and evidence| F[Immutable artifact store]
+    D2 -->|Candidates and evidence| F
+    C --> E[Isolated official-engine evaluation workers]
+    F --> E
+    E -->|Results and replays| C
+    C -->|Permitted feedback and control| A1
+    C -->|Permitted feedback and control| A2
 ```
 
-The existing anicolao projects are the most direct integration starting points: `battlecode2023` contains a local match harness, while `battlecode-2026` contains submission, status, scrimmage, and replay scripts. Reuse should proceed component by component after contract checks; the 2026 replay producer and analyzer currently disagree on output labels. These are migration candidates, not a validated implementation of this architecture.[^12][^13]
+This is nesting of responsibility and process isolation. The supervisor and competitor VMs can be sibling instances on GCE; the supervisor does not need to run a hypervisor inside itself. Containers can isolate development matches and analysis processes within a competitor VM. Authoritative cross-competitor evaluation runs outside the inner agents' writable environments, in coordinator-managed containers or VMs. Container workers do not receive a host Docker socket or administrative access that would undo that boundary.
 
-Terry Van Belle's `battlecode*-vibe` projects add close public precedents: agent-readable native replays, launch-time bot identification, frozen opponents, and scheduled tournaments. Evaluate these tools alongside the anicolao components before designing replacements. Their logs also show why internal improvement must be checked against independent opponents.[^19][^20]
+“LLM runs inside” means its session, agent process, shell, tools, and working files reside in the appropriate environment. The harness may call a hosted model through an API; running model weights on that VM is a separate optional deployment choice. Inner agents receive their own model access and repository permissions, while cloud provisioning and cross-competitor access stay with the supervisor's trusted services.
 
-Begin with local processes or containers and a single coordinating writer. Worker concurrency can increase without changing the experiment format. Distributed scheduling is an extension of the same contract, not a prerequisite for useful autonomy. Nudge provides relevant runner ideas, while CodeClash provides the competitive code-editing loop; adopting either implementation requires validating its behavior against bcenv's contracts.[^3][^4]
+The **competition bot** is a further, distinct execution context: the packaged program runs inside the official game's constraints. It need not call an LLM or contain a learned policy. Autonomous development of a procedural bot remains a valid outcome.
+
+### NixOS images and season environments
+
+Use a versioned Nix flake to define shared packages and NixOS modules, with separate supervisor and competitor roles. Build a GCE-compatible competitor image and a local VM configuration from the same modules. NixOS documents building custom GCE images; bcenv should own and identify its release images rather than depend on an unspecified preinstalled cloud machine.[^27]
+
+The image supplies the operating system, Nix, service accounts, agent-launch service, and common tooling. A season configuration selects the Battlecode origin and revision, language toolchain, engine, replay tools, and agent harness. Inside the VM, a setup service prepares the Nix environment and writable checkout, then validates it before enabling the inner loop. The official 2026 Java scaffold is a reasonable reference integration, while the contract permits other supported languages and future seasons.[^1][^2]
+
+Keep the reusable image separate from campaign state. A campaign manifest binds the image identifier, bcenv revision, flake lock, platform architecture, season bundle, agent configuration, and workspace identity. Explicitly pin dependencies fetched outside Nix, including Gradle and model-client dependencies; a Nix development shell alone does not make network downloads reproducible or provide process isolation.
+
+Inject credentials at runtime rather than bake them into images or Nix store paths. Persist journals, checkpoints, and artifacts outside disposable boot disks. A replacement VM should recover from the declared release and recorded state, while an image upgrade creates a new environment identity rather than changing a measured run in place.
+
+### The outer supervision loop
+
+The supervisor translates the human's objective into a campaign configuration: season, competitor roster, information-sharing policy, models, budgets, evaluation suite, and submission authority. Through a provider adapter it creates the VMs, installs the selected configuration, waits for readiness checks, and starts each inner agent. Readiness includes the expected toolchain, a valid checkout, an engine smoke match, and usable replay analysis.
+
+It then monitors both liveness and progress: session health, experiment completion, cost, repeated failures, and performance against the declared reference suite. It may restart interrupted agents, allocate remaining resources, or launch a competitor with a different approach within the campaign's authority. It evaluates frozen artifacts, records any guidance it gives inner agents, and reports progress, uncertainty, costs, and final outcomes to the human. Supervisor-provided strategy counts as intervention when measuring an inner agent's independence.
+
+The outer LLM makes supervisory decisions; the **trusted coordinator is ordinary software** that enforces budgets, permissions, durable operations, and lifecycle transitions. Cloud actions go through explicit tools such as provision, inspect, start, checkpoint, and stop. A non-LLM supervisor service handles heartbeats and recovery even when model access is unavailable. Provisioning is idempotent and associated with campaign IDs so retries and restarts do not create untracked machines or duplicate loops.
+
+### Relationship to earlier environments
+
+The anicolao 2023 project uses a Docker development environment, and the 2026 project supplies a Nix shell for its Java tools. These establish useful environment boundaries, but the inspected 2026 flake targets a macOS development shell, not a NixOS cloud image. Terry Van Belle documents a cloud-hosted Claude Code driver separate from match compute, and later multi-lineage supervision. The proposed design combines these precedents into explicit per-competitor VMs; it does not assume their existing deployments already have that exact topology.[^29][^30][^26]
+
+Their match, submission, and replay tools remain candidates for reuse after contract checks, including the previously identified replay-label mismatch.[^12][^13][^19] Nudge and CodeClash offer additional runner and competitive-loop precedents.[^3][^4] Prefer a small Python coordinator provisionally, with declarative machine and tool definitions in Nix. The existing Node/Husky tooling continues to enforce bcenv's construction prompt record.
+
+## A framework for iterating on bcenv
+
+Develop bcenv in a separate checkout and Nix development environment, optionally itself inside a disposable VM or container. That workspace builds the supervisor and competitor images and exercises them as a small test deployment. A human or coding agent improving bcenv works on infrastructure releases; inner competitor agents work on their bots. A running campaign keeps its selected bcenv release until an explicit upgrade or replacement is recorded.
+
+The repository should expose these proposed interfaces:
+
+| Definition | Purpose |
+| --- | --- |
+| Shared flake and development shell | Reproduce bcenv's own editing, checking, and build tools |
+| Supervisor and competitor NixOS modules | Define services, accounts, storage, and network boundaries once |
+| Local VM and GCE image targets | Exercise the same role definitions locally and deploy them remotely |
+| Season definitions | Bind repository acquisition, toolchain, engine, and validation to a competition |
+| Campaign manifests | Configure competitors, budgets, evaluation, and information access without editing infrastructure code |
+| Provider adapter | Implement provision, status, connect, checkpoint, and teardown for a local backend or GCE |
+| VM integration checks | Verify the complete supervisor-to-competitor lifecycle and evidence flow |
+
+The infrastructure development loop is: change a module or service, build a candidate release, boot a disposable supervisor and competitor deployment, verify the lifecycle, then compare bounded campaigns on the old and new releases. Keep failures as reproducible fixtures. NixOS VM tests can exercise multiple declaratively configured machines, making them a suitable basis for these checks.[^28]
+
+Use scripted agent substitutes and model-service fixtures for repeatable infrastructure checks, then small real-LLM campaigns for behavioral evaluation. Check repository setup, agent startup, candidate export, evaluation, reporting, restart recovery, and resource reclamation. Test that one competitor cannot read another's workspace or alter evaluation artifacts. Local checks validate shared configuration; a bounded GCE smoke deployment separately validates provider-specific boot, identity, networking, and disk behavior.
+
+On a macOS development machine, delegate Linux image builds and VM checks to an appropriate Linux builder rather than assume the local shell reproduces the target platform. Record builder architecture and image identity. Successful local tests are evidence about infrastructure behavior, not a claim that an agent will produce a stronger bot.
+
+This structure supports improving bcenv itself without losing the ability to reproduce the environment that produced an earlier competitor. Infrastructure quality and competitive improvement can then be assessed independently.
 
 ## Season integrations
 
@@ -50,7 +117,7 @@ A season integration binds generic development operations to one concrete compet
 
 | Field | Required content |
 | --- | --- |
-| Identity | Season, integration version, engine commit or release, container digest where used |
+| Identity | Season, integration version, engine commit or release, Nix closure and image identifiers |
 | Rules | Archived rules and API documentation with content hashes; known patches and relevant competition conditions |
 | Toolchain | Scaffold revision, language, compiler/runtime versions, dependency resolution and build commands |
 | Game execution | Map files and hashes, legal player slots, supported seed controls, match command, resource limits |
@@ -149,7 +216,7 @@ Do not prescribe one bot architecture. State machines, goal systems, tactical se
 
 Keep a queryable hypothesis register alongside full logs: claim, scope, evidence, decision, unresolved uncertainty, and the observation that would justify reopening it. A context handoff should read this compact register and inspect original evidence on demand. Changes in objective or architecture must trigger review of old conclusions rather than silently inherit their verdicts; Van Belle's objective revision and cross-lineage methods provide concrete motivation.[^23][^24]
 
-A campaign is the durable unit of autonomous work. It contains the objective, season, agent configuration, resource budget, authorized competition actions, candidates, experiments, decisions, and human interventions.
+A campaign is the durable unit of supervised autonomous work. It contains the objective, season, supervisor configuration, competitor configurations and VM identities, resource budget, authorized competition actions, candidates, experiments, decisions, and human or supervisor interventions.
 
 Use an append-only event journal with a single writer, durable writes before acknowledgment, and stable operation IDs. A SQLite index can support queries, but must be rebuildable from the journal and artifact metadata. A restart reconciles jobs and existing outputs before retrying; it must not duplicate submissions or count an attempt twice.
 
@@ -161,7 +228,7 @@ Account for elapsed time, engine compute, model usage, and artifact storage. Res
 
 ## Trust and submission boundaries
 
-The candidate workspace is writable; the evaluator, engine bundle, opponent snapshots, and authoritative result store are not. Run builds and games in isolated workers with bounded resources. Keep competition credentials in the submission service rather than inside bot or model-controlled processes. Game workers should not need network access.
+Within each competitor VM, the candidate workspace is writable; coordinator-managed evaluator installations, opponent snapshots, and authoritative result stores are outside the inner agent's write authority. Run builds and games in isolated workers with bounded resources. Keep competition credentials in the submission service rather than inside bot or model-controlled processes. Game workers should not need network access.
 
 Retrieved documentation, repositories, and replay text are task data. Instructions embedded in them do not alter campaign authority. The coordinator validates tool requests against configured permissions and budgets independently of the model's prose.
 
@@ -181,9 +248,9 @@ Version the machine-readable replay-analysis schema and reject missing required 
 
 Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These are proposed acceptance checks; no environment or gameplay tests have yet been implemented or run by this documentation change.
 
-## Optional independent-lineage experiments
+## Competitor supervision and information sharing
 
-A research campaign may run several development lineages against one another while sharing strategy-neutral tools. This is an optional experimental mode, not a requirement that every bcenv run use multiple agents. Give each lineage its own workspace, event stream, budget, and frozen candidates; the trusted coordinator alone schedules cross-lineage matches and releases permitted evidence.
+Supervising multiple competitors is a core capability of the outer agent; a campaign can choose to run just one. Each development lineage occupies its own competitor VM, with its own workspace, event stream, budget, and frozen candidates. The trusted coordinator schedules cross-lineage matches and releases permitted evidence. Whether lineages exchange strategy or remain independent is an explicit experimental choice.
 
 Make information access a campaign policy with distinct choices for opponent source, replay, outcome, and methodology. Van Belle's projects use different policies across seasons, so “external benchmark” is not a sufficient permission definition. If independence is an experimental condition, enforce it at filesystem, tool, and transcript boundaries rather than rely solely on instructions. Record later policy changes, such as opening a retired lineage's code.[^26]
 
@@ -191,7 +258,7 @@ A scheduled tournament measures the participating lineages. It does not establis
 
 ## Decisions still open
 
-The sketch favors a local Python coordinator, native season tooling, immutable artifacts, and official-engine evaluation. The following choices need empirical evidence or concrete season requirements:
+The sketch favors an isolated LLM supervisor, a trusted Python coordinator, NixOS competitor images, Nix-managed season tooling, immutable artifacts, and independent official-engine evaluation. The following choices need empirical evidence or concrete season requirements:
 
 - Which parts of the existing 2023/2026 harness and service scripts should be adapted, and where CodeClash or Nudge adds capabilities beyond that foundation.
 - Which model and memory policy improves development outcomes under a fixed cost budget.
@@ -255,3 +322,11 @@ These uncertainties do not change the central boundary: the agent chooses and de
 [^25]: Terry Van Belle and agent contributors. [agent-watchdog.sh](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/tools/agent-watchdog.sh). External liveness checking and coordinator recovery; source inspection only. Accessed September 11, 2026.
 
 [^26]: Terry Van Belle and agent contributors. [Battlecode 2026 BENCHMARK.md](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/BENCHMARK.md). Opponent origins and stated access policy, including the anicolao bot. Terry Van Belle and agent contributors. [Battlecode 2025 MULTI_AGENT.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/MULTI_AGENT.md). Protocol, isolation boundaries, context cycling, and September 10 amendments; not an independently verified isolation guarantee. Accessed September 11, 2026.
+
+[^27]: NixOS contributors. [Install NixOS on GCE](https://wiki.nixos.org/wiki/Install_NixOS_on_GCE). Custom-image deployment reference; accessed September 11, 2026. Exact build and provisioning commands must be validated against the selected Nixpkgs release.
+
+[^28]: nix.dev contributors. [Integration testing with NixOS virtual machines](https://nix.dev/tutorials/nixos/integration-testing-using-virtual-machines.html). Declarative multi-machine integration tests; accessed September 11, 2026.
+
+[^29]: anicolao and contributors. [2023 development Dockerfile](https://github.com/anicolao/battlecode2023/blob/85af2296cad95443aad3925929fca70aacb650eb/devcon/Dockerfile) and [2026 flake.nix](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/flake.nix). Private source snapshots; Docker development environment and aarch64-darwin Nix shell, respectively. Accessed September 11, 2026.
+
+[^30]: Terry Van Belle and agent contributors. [CLOUD_DRIVER.md](https://github.com/terryvanbelle/battlecode22-vibe/blob/b1d36b4d82f931b37385e45e87eeecf92df54782/CLOUD_DRIVER.md). Cloud-hosted Claude Code driver separated from match compute; accessed September 11, 2026. Described topology is a precedent, not an implemented NixOS competitor image.
