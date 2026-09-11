@@ -6,11 +6,11 @@ The strongest recurring pattern in the reviewed Battlecode accounts is a develop
 
 For bcenv, the important opportunity is to automate that development process. A language model that writes a bot is only one component. The environment must let an agent form hypotheses, preserve candidate versions, run trustworthy comparisons, inspect individual games, and deliver the artifact it actually validated. This is an inference from the evidence below, not a demonstrated recipe for autonomous tournament success.
 
-CodeClash is a close precedent for autonomous competitive code development, and concrete Battlecode learning experiments and AI-assisted repositories exist. However, the reviewed evidence does **not establish a fully autonomous agent winning MIT's annual Battlecode competition**. AI-generated code, a learning environment, a published tournament bot, and a successful autonomous competition campaign are different achievements.
+CodeClash is a close public precedent for autonomous competitive code development. The anicolao Battlecode repositories additionally supply project-specific predecessors: a 2023 bot and match harness, and a 2026 AI-assisted development campaign with submission and replay tools. However, the reviewed evidence does **not establish a fully autonomous agent winning MIT's annual Battlecode competition**. AI-generated code, a learning environment, a published tournament bot, and a successful autonomous competition campaign are different achievements.
 
 ## Scope and strength of evidence
 
-This draft covers material available through September 11, 2026: early retrospectives, season accounts from 2014–2026, source repositories, learning experiments, and recent autonomous-coding infrastructure. MIT's past-years index supplies the principal season and placement reference; the Battlecode Archive provides additional discovery leads. Neither index implies that every linked repository was audited or executed.[^1][^2]
+This draft covers public material and authorized private repository evidence available through September 11, 2026: early retrospectives, season accounts from 2014–2026, source repositories, learning experiments, and recent autonomous-coding infrastructure. MIT's past-years index supplies the principal season and placement reference; the Battlecode Archive provides additional discovery leads. Neither index implies that every linked repository was audited or executed.[^1][^2]
 
 The review prioritizes participants' own postmortems, organizer materials, research publications, and inspectable code. Described implementations were read, not reproduced. Tournament placements are contextual evidence, not controlled measurements of individual techniques. Performance numbers from authors remain self-reported. Repository snapshots are pinned where practical; mutable pages may change.
 
@@ -147,6 +147,74 @@ The practical conclusion is to reuse the competitive coding-loop idea and evalua
 **Metta AI's cogame-battlecode** exposes a constrained interface: an agent supplies a sealed doctrine for a prewritten bot chassis in a deterministic Nim port. Its README documents parity machinery and accepted divergences. That is a potentially useful policy-search surface, but is different from independently writing an arbitrary legal bot for the official engine. The project's parity claims were not reproduced in this review.[^54]
 
 **ECLAIR Robotics' battlecode-gym** implements a small territory game with its own grid and shooting rules. Despite its name, the inspected environment is not evidence of a faithful MIT season adapter. Similar names must not become evidence of successful transfer.[^55]
+
+## Earlier work in the anicolao repositories
+
+### Coverage and relationship to bcenv
+
+The account-wide review covered the metadata of 152 owned repositories, including forks and private repositories, and screened available default-branch file trees and 2,362 documentation files for Battlecode references. It identified two direct predecessor projects, **battlecode2023** and **battlecode-2026**, in addition to bcenv. The two predecessors received closer source, branch, and available pull-request review. This is a relevance screen of the account, not a line-by-line audit of every repository or every historical commit. Two repositories were empty; one unrelated chess repository's tree could not be retrieved. Documentation screening excluded vendor directories and files of one megabyte or larger.
+
+These private sources are cited with repository snapshots or specific pull requests; readers need repository access to inspect them. They substantially expand the evidence about bcenv's own development lineage, but do not supply a verified annual tournament placement. References to other repositories are traced below, with infrastructure ancestry distinguished from competing bot implementations.
+
+### battlecode2023: a bot and local experiment harness
+
+The 2023 project already combines a Java bot with a container-based development environment, a headless match harness, and browser replay playback. Its README describes fixture-driven runs and filenames containing both players and the map. That is an earlier implementation of several capabilities proposed for bcenv, rather than merely an idea for future tooling.[^61]
+
+The bot separates roles from navigation, shared memory, accounting, and board knowledge. `SharedMemory` packs coordinates with a validity bit and allocates named regions of the shared array. `Navigator` contains both inexpensive obstacle handling and a bounded A* implementation with current-aware edges. `Launcher` chooses low-health targets and uses observed or inferred wells as objectives. These are inspectable procedural game-AI techniques; their presence does not establish that every alternative was enabled in the submitted bot or that it improved results.[^62]
+
+The test harness reads engine properties from fixture files and invokes the official server. Sixteen `.in` fixtures are present. The replay filename includes teams and map but no candidate revision, so repeating the same matchup can target the same output path. This provides a concrete migration lesson: retain the convenient fixture format, but assign every run a unique experiment and artifact identity. Existing expected-output files and a working-looking harness are not a reproduced performance benchmark.[^63]
+
+The three additional published branch heads preserve alternative development states. They are useful candidate ancestry, not three independent competition results. Neither the inspected code nor the available repository documentation establishes LLM authorship or model training for this 2023 project.
+
+### battlecode-2026: an AI-assisted development campaign
+
+The 2026 repository is the closest project-specific predecessor to bcenv. `DEVELOPMENT_LOOP.md` specifies analysis, one testable change, local regression checks, remote scrimmages, and a retain-or-revert decision. `WORKFLOW.md` requires preservation of initiating prompts in pull requests. These are prescribed procedures; compliance must be assessed from the actual records rather than inferred from the instructions.[^64]
+
+Its 33 pull requests and iteration documents contain concrete development attempts and human steering. The first iteration records a local win against the basic example bot, losses in five remote scrimmages, and a navigation change that regressed locally and was reverted. The observed contrast is valuable, while the proposed explanations—unsafe movement, randomness, or flawed navigation—remain hypotheses in that account.[^65]
+
+The later consolidated iteration summary records repeated attempts to address starvation, traffic around the king, delivery priorities, and mining. It explicitly substitutes a retrospective for missing individual records. Its claim that iterations 25–83 lacked individual documents also conflicts with the presence of some numbered files in that range. Treat this as an incomplete, overlapping narrative rather than a complete chronological experiment ledger.[^66]
+
+Several records sharpen the distinction between automation and autonomy:
+
+| Record | Evidence in the record | Implication |
+| --- | --- | --- |
+| PR #30, automation tooling | A human requests dependable submission, status checking, opponent selection, replay download, and analysis; explicitly distinguishes successful upload from accepted compilation. | Reliable service operations were a practical bottleneck despite the documented development loop.[^67] |
+| PR #31, spawning and defense | Human instructions recommend regression bisection; the account attributes spawning failures to confusion between carried and global cheese and to an incorrect spawn distance. | Rules/API interpretation errors can look like strategic weakness. The claimed diagnosis is historical evidence, not a newly reproduced engine result.[^68] |
+| Iteration 0034 / PR #32 | Reports a three-map win against `betterexamplefuncsplayer` after making units converge to defend the king. | Evidence of a claimed targeted improvement, not general tournament strength. Submission and scrimmage identifiers make the claim more traceable, but were not independently revalidated.[^69] |
+| PR #33, replay analysis and cleanup | Human feedback identifies two workspaces and warns against including analysis tools in the submission source. The resulting account describes spawning, oscillation, and early death. | Workspace confusion and packaging contamination belong among bcenv's concrete failure cases. Human diagnosis also prevents classifying this record as an independently completed campaign.[^70] |
+
+This is stronger evidence of AI-assisted Battlecode development than an AI-related repository label: the recorded human corrections explicitly discuss prior AI work. It still does not identify a reproducible model configuration, uninterrupted autonomous campaign, or verified official placing. A `.gemini` ignore entry alone would not justify attributing all code to a particular model.
+
+### Tool contracts and evidence quality
+
+Static inspection reveals an important mismatch in the final 2026 snapshot. `scripts/analyze_matches.py` expects the winner label `Match Ended - Winner ID:`, initializes the winner to `?`, and maps anything other than `1` to `NO`. The Java tool it compiles instead prints `Match Winner:`. That output cannot populate the expected winner field. Several expected aggregate metrics are also absent from this tool's output; a later required lookup of `KingBDied` can raise `KeyError` rather than produce a report. A synthetic check of the isolated parser confirmed the unrecognized winner label and missing field, without running the engine or contacting the competition service. This establishes a producer/consumer contract mismatch; it does **not** establish that earlier reported scrimmage wins were false, since earlier tool versions and other evidence may differ.[^71][^72]
+
+The same Python analyzer excludes replay IDs below a hard-coded threshold and treats Team A's result as the win indicator without resolving the campaign's participant identity. Those assumptions must be explicit experimental filters and participant mappings. Otherwise, analysis can misclassify outcomes or fail independently of the bot and engine.[^71]
+
+Other useful components need clearer operational contracts before reuse:
+
+- `upload_submission.py` uploads an existing `submission.zip` and returns an identifier, but does not bind the ZIP to a source snapshot or wait for compilation. Its command-line entry point also does not turn a returned upload failure into a failing exit status.[^73]
+- `check_submission.py` polls the latest five submissions for a requested ID and returns the same false result for rejection and timeout. bcenv should track the specific receipt and distinguish those outcomes.[^74]
+- `review_scrimmages.py` fetches only the first history page and marks completed results as reviewed independently of replay-download success. Result discovery, artifact acquisition, and analysis completion therefore need separate checkpoints.[^75]
+- `build.gradle` places tools in a separate source set and packages the main sources. That separation is a useful existing solution to the packaging concern; the artifact manifest should enforce it rather than depend on remembering a directory convention.[^76]
+
+The Java replay inspector already detects A–B–A movement, reads native replay structures, and reports selected actions. Its hard-coded action identifiers and FlatBuffers offsets make schema identity especially important. An oscillation finding is an observation; whether the movement is harmful still depends on tactical context.[^72]
+
+The lesson is that **the feedback system is itself experimental software**. A plausible report is not enough. bcenv must test evidence producers and consumers together and represent unavailable metrics as unavailable, rather than interpret default values as observations.
+
+### Repository references and upstream ancestry
+
+| Reference path | Repository followed | Relevance and boundary |
+| --- | --- | --- |
+| `battlecode2023/devcon/setup` | `battlecode/battlecode23` | The setup clones the official engine/client repository. Its documented engine, schema, client, and example-bot separation supports separate match and replay services.[^77] |
+| `battlecode-2026/reference/battlecode26` | `battlecode/battlecode26` at `3d2a4ffb…` | The tracked gitlink resolves to an official engine commit. The snapshot lacks a `.gitmodules` mapping, so the checkout alone does not provide a complete retrieval recipe. Record origin and revision explicitly in a season bundle.[^78] |
+| Official 2023 and 2026 README porting notes | `battlecode/battlehack20` | Describes a Python engine with Django backend and React frontend. This is adjacent competition infrastructure and repository ancestry, not evidence of an annual Battlecode winner or learned policy.[^79] |
+| Battlehack porting notes | `battlecode/battlecode20` | Separates Java engine, replay schema, client, and competition website. This reinforces that competition service APIs and the local game runtime are different integration surfaces.[^80] |
+| Battlecode 2020 porting notes | `battlecode/battlecode19` | Documents a JavaScript engine/viewer/runtime and a Java/Python transpilation service. Language support can involve compilation into another runtime, so a season manifest must capture that chain.[^81] |
+
+The 2023 build scripts also refer to Google Error Prone and Auto, and generated Gradle wrappers refer to Gradle. These are general build dependencies, not additional Battlecode competitors; they do not expand the evidence for competitive strategy or autonomous participation. No additional competitor repository was identified through the inspected predecessor branches and pull-request references.
+
+For bcenv, the resulting change in emphasis is substantial: start the architecture discussion from the existing local harness, remote submission scripts, replay tooling, and recorded failures. External systems remain useful comparisons, but the project already has a concrete migration and hardening case in its own history.
 
 ## What the history implies for bcenv
 
@@ -311,3 +379,45 @@ This document should grow by adding primary evidence and correcting claims when 
 [^59]: MIT Battlecode. [Battlecode 2026 engine, client, and replay schema](https://github.com/battlecode/battlecode26/tree/103abf6b67a2cf544e6344dddef9318af9ae9193). snapshot accessed September 11, 2026.
 
 [^60]: MIT Battlecode. [Battlecode 2026 Java scaffold](https://github.com/battlecode/battlecode26-scaffold/tree/f69e2ab872a0061c9d4a684aa1dd798a0829da85). snapshot accessed September 11, 2026.
+
+[^61]: anicolao. [Battlecode 2023 development README](https://github.com/anicolao/battlecode2023/blob/85af2296cad95443aad3925929fca70aacb650eb/README.md). 2023 project; private repository snapshot. Accessed September 11, 2026.
+
+[^62]: anicolao and contributors. [Battlecode 2023 bot: navigation, shared memory, and roles](https://github.com/anicolao/battlecode2023/tree/85af2296cad95443aad3925929fca70aacb650eb/src/java/submission). 2023 project; private repository snapshot. Accessed September 11, 2026.
+
+[^63]: anicolao and contributors. [Battlecode 2023 fixture-driven match harness](https://github.com/anicolao/battlecode2023/tree/85af2296cad95443aad3925929fca70aacb650eb/src/javatests/battlecode). 2023 project; private repository snapshot. Accessed September 11, 2026.
+
+[^64]: anicolao and contributors. [Development Loop](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/DEVELOPMENT_LOOP.md). January 2026 campaign; private repository snapshot; see also WORKFLOW.md in the same snapshot. Accessed September 11, 2026.
+
+[^65]: anicolao and contributors. [Iteration 0001 — Analysis](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/ITERATION_0001.md). January 7, 2026; private record; results not independently reproduced. Accessed September 11, 2026.
+
+[^66]: anicolao and contributors. [Iteration Summary: 25–83](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/ITERATION_SUMMARY_25_83.md). January 2026 campaign; private retrospective with incomplete and overlapping iteration coverage. Accessed September 11, 2026.
+
+[^67]: anicolao and contributors. [PR #30: Infra: Rigid Automation Scripts](https://github.com/anicolao/battlecode-2026/pull/30). merged January 10, 2026; private pull request. Accessed September 11, 2026.
+
+[^68]: anicolao and contributors. [PR #31: fix: 0-Spawn Bug and Rush Defense](https://github.com/anicolao/battlecode-2026/pull/31). merged January 10, 2026; private pull request; historical diagnosis not reproduced. Accessed September 11, 2026.
+
+[^69]: anicolao and contributors. [Iteration 0034: Anti-Rush Defense](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/ITERATION_0034.md). January 2026 campaign; private record; reported three-map result not independently verified. Accessed September 11, 2026.
+
+[^70]: anicolao and contributors. [PR #33: Fix Replay Analysis & Repo Cleanup](https://github.com/anicolao/battlecode-2026/pull/33). merged January 11, 2026; private pull request. Accessed September 11, 2026.
+
+[^71]: anicolao and contributors. [scripts/analyze_matches.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/analyze_matches.py). private snapshot; inspected parse_output and analyze_matches. Accessed September 11, 2026.
+
+[^72]: anicolao and contributors. [tools_src/tools/InspectReplay.java](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/tools_src/tools/InspectReplay.java). private snapshot; inspected output labels, action parsing, and oscillation detection. Accessed September 11, 2026.
+
+[^73]: anicolao and contributors. [scripts/upload_submission.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/upload_submission.py). private snapshot; source inspection only; no upload performed. Accessed September 11, 2026.
+
+[^74]: anicolao and contributors. [scripts/check_submission.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/check_submission.py). private snapshot; source inspection only; no competition API polling performed. Accessed September 11, 2026.
+
+[^75]: anicolao and contributors. [scripts/review_scrimmages.py](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/scripts/review_scrimmages.py). private snapshot; source inspection only. Accessed September 11, 2026.
+
+[^76]: anicolao and contributors. [build.gradle: tools source set and zipForSubmit](https://github.com/anicolao/battlecode-2026/blob/9cc5452f312aa829eafa2739c62909f87170038b/build.gradle). private snapshot; no build or submission performed. Accessed September 11, 2026.
+
+[^77]: MIT Battlecode. [Battlecode 2023 repository README](https://github.com/battlecode/battlecode23/blob/af42086ecd09709dc603b2aaa9e9b98312c9ef79/README.md). upstream linked by [devcon/setup](https://github.com/anicolao/battlecode2023/blob/85af2296cad95443aad3925929fca70aacb650eb/devcon/setup). Accessed September 11, 2026.
+
+[^78]: MIT Battlecode. [Battlecode 2026 engine snapshot referenced by the predecessor](https://github.com/battlecode/battlecode26/tree/3d2a4ffb39a4aca3b214aaa1b18e957a6240904f). gitlink recorded in [the predecessor reference tree](https://github.com/anicolao/battlecode-2026/tree/9cc5452f312aa829eafa2739c62909f87170038b/reference). Accessed September 11, 2026.
+
+[^79]: MIT Battlecode. [Battlehack SP20 README](https://github.com/battlecode/battlehack20/blob/b21cbbe16064dc44f448b9459e25d197d1e0b2bd/README.md). 2020 infrastructure; linked from official engine porting notes. Accessed September 11, 2026.
+
+[^80]: MIT Battlecode. [Battlecode 2020 README](https://github.com/battlecode/battlecode20/blob/7618f6be7d12da39f2e6e25801e578f1fecfbd86/README.md). 2020 infrastructure; linked from Battlehack porting notes. Accessed September 11, 2026.
+
+[^81]: MIT Battlecode. [Battlecode 2019 README](https://github.com/battlecode/battlecode19/blob/80cf1cc535ec5a30559274aa1b49807ad4859925/README.md). 2019 infrastructure; linked from Battlecode 2020 porting notes. Accessed September 11, 2026.
