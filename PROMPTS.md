@@ -31,3 +31,11 @@ The prompt record may contain a short 3-6 word summary of the prompt above the v
 ```text
 Let's create the github repository and put this up as PR#1.
 ```
+
+## Prompt 6: Prepare first pull request
+
+Repeated from Prompt 5 for the project foundation commit supporting the same request.
+
+```text
+Let's create the github repository and put this up as PR#1.
+```
