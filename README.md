@@ -10,6 +10,12 @@ This project is in its initial design stage. There is no implementation or runna
 
 See [VISION.md](VISION.md) for the long-term objective, scope, and measures of success. Draft research and architecture proposals are in [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md) and [INITIAL_DESIGN_SKETCH.md](INITIAL_DESIGN_SKETCH.md).
 
+## Proposed environment
+
+An outer LLM supervisor runs in an isolated VM or container and manages one or more competitor VMs. Each competitor boots a NixOS image, uses Nix to prepare the season's tooling and Battlecode checkout, and runs its own LLM development agent inside that environment. The supervisor provisions and monitors competitors, arranges independent evaluation, and reports outcomes to the human.
+
+The same declarative environment definitions should support disposable local test deployments and cloud deployment on a provider such as GCE, giving contributors a repeatable framework for improving bcenv itself. See the [design sketch](INITIAL_DESIGN_SKETCH.md) for the proposed boundaries and lifecycle.
+
 ## Planned workflow
 
 bcenv will support an agent through a complete competition development loop:
@@ -32,7 +38,7 @@ The environment should preserve source versions, experiment settings, and result
 - **Agent interface:** Structured actions and observations suitable for autonomous development.
 - **Competition preparation:** Validation and packaging of submission artifacts, with submission support where permitted and authorized.
 
-Specific languages, agent frameworks, and infrastructure have not been selected. Season-specific dependencies and setup instructions will be documented as implementations are added.
+The draft design proposes NixOS images and Nix-managed environments, with GCE as a reference cloud provider. Agent frameworks, exact deployment tooling, and season-specific setup remain design choices; no VM images or runtime implementation are available yet.
 
 ## Contributing
 

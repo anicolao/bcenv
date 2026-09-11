@@ -57,3 +57,9 @@ review all of my repositories for battlecode related work and any repositories t
 ```text
 did my repositories lead you to also look at Terry Van Belle's efforts in this area? If not, do so now.
 ```
+
+## Prompt 10: Establish nested NixOS agent environments
+
+```text
+hmm. I feel like some high level description of containerization belongs near the top of the design sketch. I'm imagining a nixos VM image that can be deployed to a VM provider like GCE, which inside it uses nix to set up the tooling and environment for cloning the battlecode repository, and inside that does the battlecode development. The LLM doing the battlecode development should run inside that environment, but a second LLM is needed to create the VMs, set things up for the specific competition, and kick off and monitor the internal development loop. This outer LLM shoudl be able to supervise multiple competitors and evaluate their work and report back to the human about the outcomes; and it itself ideally would run in yet another container or VM that is isolated. I think Terry's setup is like this and even my past setups are more like this using either docker or nix to isolate concerns. let's update to include these ideas and make them prominent. we need a good frmework to work in to iterate on bcenv itself.
+```
