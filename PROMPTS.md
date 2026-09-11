@@ -51,3 +51,9 @@ OK that is rebased and merged. Let's start a new long-running research effort to
 ```text
 review all of my repositories for battlecode related work and any repositories tehy refer to to expand your research.
 ```
+
+## Prompt 9: Investigate Terry Van Belle
+
+```text
+did my repositories lead you to also look at Terry Van Belle's efforts in this area? If not, do so now.
+```

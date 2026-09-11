@@ -6,7 +6,7 @@ The strongest recurring pattern in the reviewed Battlecode accounts is a develop
 
 For bcenv, the important opportunity is to automate that development process. A language model that writes a bot is only one component. The environment must let an agent form hypotheses, preserve candidate versions, run trustworthy comparisons, inspect individual games, and deliver the artifact it actually validated. This is an inference from the evidence below, not a demonstrated recipe for autonomous tournament success.
 
-CodeClash is a close public precedent for autonomous competitive code development. The anicolao Battlecode repositories additionally supply project-specific predecessors: a 2023 bot and match harness, and a 2026 AI-assisted development campaign with submission and replay tools. However, the reviewed evidence does **not establish a fully autonomous agent winning MIT's annual Battlecode competition**. AI-generated code, a learning environment, a published tournament bot, and a successful autonomous competition campaign are different achievements.
+CodeClash and Terry Van Belle's connected `battlecode*-vibe` projects are close public precedents for autonomous competitive code development. The anicolao Battlecode repositories additionally supply project-specific predecessors: a 2023 bot and match harness, and a 2026 AI-assisted development campaign with submission and replay tools. However, the reviewed evidence does **not establish a fully autonomous agent winning MIT's annual Battlecode competition**. AI-generated code, a learning environment, a published tournament bot, and a successful autonomous competition campaign are different achievements.
 
 ## Scope and strength of evidence
 
@@ -214,7 +214,65 @@ The lesson is that **the feedback system is itself experimental software**. A pl
 
 The 2023 build scripts also refer to Google Error Prone and Auto, and generated Gradle wrappers refer to Gradle. These are general build dependencies, not additional Battlecode competitors; they do not expand the evidence for competitive strategy or autonomous participation. No additional competitor repository was identified through the inspected predecessor branches and pull-request references.
 
-For bcenv, the resulting change in emphasis is substantial: start the architecture discussion from the existing local harness, remote submission scripts, replay tooling, and recorded failures. External systems remain useful comparisons, but the project already has a concrete migration and hardening case in its own history.
+For bcenv, the resulting change in emphasis is substantial: start the architecture discussion from the existing local harness, remote submission scripts, replay tooling, and recorded failures. External systems remain useful comparisons, but the project already has a concrete migration and hardening case in its own history. Terry Van Belle's projects, examined next, supply an additional direct connection through their benchmark use of the anicolao bot.
+
+## Terry Van Belle's agentic Battlecode projects
+
+### Direct connection and historical setting
+
+Terry Van Belle's `battlecode22-vibe`, `battlecode26-vibe`, and `battlecode25-vibe` form a connected series of agentic bot-development experiments. Their repository creation dates are August–September **2026**: the numbers identify the game seasons, not the dates of participation. They are retrospective experiments on those rulesets, and their descriptions as contest entries do not establish entry in the original annual tournaments.[^82]
+
+There is a direct connection to the anicolao work: the 2026 project's benchmark manifest names `anicolao/battlecode-2026` as an opponent. This is an **incoming reference from Terry's repository**, rather than an outgoing link from the anicolao repositories. It adds evidence that the earlier account-wide outgoing-reference screen did not capture.[^86]
+
+These projects are a particularly close public precedent for bcenv: they combine sustained agent sessions, explicit experimentation procedures, bot snapshots, match infrastructure, and extensive accounts of failed approaches. They do not demonstrate an independently completed annual championship campaign. Recorded human changes to objectives and procedures must remain part of the autonomy assessment.
+
+### The 2022 experiment: a long loop with an external performance gap
+
+The 2022 project records iterations through **128**. Its synthesis describes navigation reuse, production bottlenecks, symmetry-sensitive decisions, and features that could not help because prerequisite units were almost never produced. It also reports a persistent **0/20** result against `sample_camelcase` and approximately **3/20** against `sample_afinals`. These are the project's own local benchmark results, not newly reproduced measurements or tournament rankings. The important distinction is that a long sequence of locally useful changes did not close the independent-opponent gap.[^83]
+
+Its replay tool is a concrete reuse candidate. It renders a native `.bc22` replay as an ASCII board and event transcript, with selectable rounds, movement, indicators, and CSV metrics. The documented tests construct a synthetic replay and check reconstruction and rendering. This offers a stronger starting point for an agent-readable replay interface than an unstructured game log alone.[^84]
+
+`CLOUD_DRIVER.md` explicitly identifies Claude Code as the development agent. It separates a persistent orchestration VM from the machine running matches, and describes restarting a session from recorded state. It also acknowledges that the tmux session does not survive a driver reboot. This is evidence of a deployed-style operating procedure, not independently verified uptime or automatic recovery.[^85]
+
+### The 2026 experiment: independent opponents expose missing mechanics
+
+The 2026 benchmark baseline for `g_iter14` reports **20/20** wins against the lecture player and **20/20** against the imported anicolao bot, but **0/20** against each of three stronger external entries. Its explanation emphasizes traps, ratnapping, and throwing missing from its earlier opponent pool. These snapshot-specific results and explanations have not been independently reproduced.[^87]
+
+This is a concrete example of a shared blind spot in self-play. A pool can contain many old versions and several named archetypes while still omit the behaviors needed to expose a strategic weakness. The project's subsequent log extends through iteration **252**, so the first external benchmark is also not its final result.[^87]
+
+Its Java replay extractor reconstructs game state and exposes diagnostic output, with accompanying test code in the snapshot. The tools README predates some of those additions and still says there is no test suite. Code and documentation must therefore be versioned together, and a claim in a setup document should not replace inspection of the actual capability.[^88]
+
+The comparison script joins games by opponent, map, and player side and reports outcome flips and round changes. It compares only the intersection of available games. For bcenv, preserve the useful paired view but also report unmatched jobs and require compatible manifests before interpreting an aggregate difference. Longer survival is a diagnostic, not an interchangeable substitute for winning.[^97]
+
+### The 2025 experiment: several lineages, scheduled evaluation, and a revised objective
+
+The 2025 project synthesizes its predecessors into an explicit training procedure. It calls for direct engine probes, scheduled API-coverage audits, bytecode monitoring, frozen opponents, and checks that a proposed change actually executes. Its method distinguishes deterministic repeatability from uncertainty over maps and opponents. These are useful hypotheses for bcenv's operating method, not a validated universal acceptance rule; in particular, a fixed head-to-head threshold or a lopsided mirror result needs interpretation under the actual season and sample design.[^89]
+
+The multi-agent protocol describes independently developed lineages, initially Alice, Bob, and Carol, with tournament results as the controlled exchange channel. It later retires Bob to fit resource limits and documents cold-starting replacement sessions from durable summaries. The protocol permits methodology to be shared while restricting strategic information between live lineages. This is a research condition documented by the project, not proof that a shared filesystem enforces isolation.[^90]
+
+The September 10 objective revision is especially informative. It says that optimizing the gap between the live lineages had produced co-adaptation without sufficient external strength, and changes the objective to absolute performance against a frozen roster with external validation. The comparison target is part of the objective: being ahead of another weak learner is not evidence that the underlying problem is nearly solved.[^91]
+
+The committed benchmark history supports the reason for that revision. On September 10, Alice is recorded at **26/150** against `v3` and **2/150** against `TSPAARKHS`; Carol at **37/150** and **0/150**. A later Darla entry on September 11 records **63/150** and **0/150**. These are repository-reported measurements attached to build identifiers, not reproduced official results. They should not be compared as controlled architecture experiments without matching the full environment and evaluation manifests.[^92]
+
+Several inspected tools are directly relevant to the design:
+
+| Component | Implemented approach | Qualification for bcenv |
+| --- | --- | --- |
+| `bot_identity.py` | Compares source content with snapshots after normalizing package declarations; reports the actual package, snapshot label, Git head, and dirty state. | Capture identity when a run starts. Its Java-package comparison is narrower than a complete hash of all execution inputs.[^93] |
+| `tournament.sh` | Exports committed bot sources, checks compilation per bot, records forfeits, and runs paired map matchups. It copies its own script before execution to avoid edits corrupting an in-flight shell run. | Freeze the entire experiment bundle, including tooling, before dispatch. Resolving `HEAD` repeatedly is weaker than resolving one immutable revision for the whole export.[^94] |
+| `agent-watchdog.sh` | Uses an external heartbeat check and tmux recovery path because a model usage limit can pause the coordinator as well as the workers. | Recovery must not depend on the unavailable model. Use a single-coordinator lease and durable job reconciliation rather than assume that nudging a session proves work resumed.[^95] |
+| `METHODS.md` | Preserves methodological lessons, corrections, and references to worked evidence while limiting strategy disclosure across lineages. | Store a claim's scope, evidence, status, and reopening condition. A corrected explanation should not erase the measurement that prompted it.[^96] |
+
+### Further competitor references
+
+Terry's opponent records also lead to additional primary repositories:
+
+- **jmerle/battlecode-2022** identifies the `camel_case` final bot and reports a 13th–16th final placing. Its README describes generated, bytecode-efficient Dijkstra navigation and a map/side match runner, and attributes navigation ancestry to Ivan Geffner's 2021 work. This is a concrete transfer chain between traditional bots and a later agentic experiment.[^98]
+- **TestSubjector/BattleCode2022** identifies `AFinalsBot`, reports the Most Adaptive Strategy award, and credits earlier Geffner and TheDuck314 work. It supplies an independent opponent with different development ancestry, rather than another snapshot of Terry's bot.[^99]
+- **Srishti-Goel/Battlecode-monke** contains `Lecture2Player`, the third imported 2022 example named in Terry's log. Its availability is established; the inspected scaffold README does not independently establish a competitive placement.[^100]
+- The 2026 suite points to the official **battlecode26-lectureplayer**, **AlexT101/battlecode26** (`finalsbot`), **erikji/battlecode26** (`SPAARK`), and **uravt/Battlecode26** (`Version41`). The food and Generalized Stroke's Theorem postmortems already appear earlier in this review; these references add concrete bot repositories to those accounts. A package name or an inherited scaffold README is not independent proof of its tournament placing.[^101][^102][^103][^104]
+
+The chief addition to bcenv's design is not simply more automation. Terry's records show an automation loop that also needs to inspect its own measurements, opponent coverage, objective, and memory. Success against a changing internal population must remain separate from evidence of progress against an independent standard.
 
 ## What the history implies for bcenv
 
@@ -421,3 +479,49 @@ This document should grow by adding primary evidence and correcting claims when 
 [^80]: MIT Battlecode. [Battlecode 2020 README](https://github.com/battlecode/battlecode20/blob/7618f6be7d12da39f2e6e25801e578f1fecfbd86/README.md). 2020 infrastructure; linked from Battlehack porting notes. Accessed September 11, 2026.
 
 [^81]: MIT Battlecode. [Battlecode 2019 README](https://github.com/battlecode/battlecode19/blob/80cf1cc535ec5a30559274aa1b49807ad4859925/README.md). 2019 infrastructure; linked from Battlecode 2020 porting notes. Accessed September 11, 2026.
+
+[^82]: Terry Van Belle. Repository metadata for [battlecode22-vibe](https://api.github.com/repos/terryvanbelle/battlecode22-vibe), [battlecode26-vibe](https://api.github.com/repos/terryvanbelle/battlecode26-vibe), and [battlecode25-vibe](https://api.github.com/repos/terryvanbelle/battlecode25-vibe). Created August 27, September 1, and September 6, 2026, respectively; game-season labels are not campaign dates. Accessed September 11, 2026.
+
+[^83]: Terry Van Belle and agent contributors. [Battlecode 2022 LEARNINGS.md](https://github.com/terryvanbelle/battlecode22-vibe/blob/b1d36b4d82f931b37385e45e87eeecf92df54782/LEARNINGS.md). Especially “Open questions / unresolved threads”; self-reported benchmark outcomes. Accessed September 11, 2026.
+
+[^84]: Terry Van Belle and agent contributors. [Battlecode 2022 replay tool documentation](https://github.com/terryvanbelle/battlecode22-vibe/blob/b1d36b4d82f931b37385e45e87eeecf92df54782/tools/README.md). Native replay rendering, metrics, and synthetic-fixture test design. Accessed September 11, 2026.
+
+[^85]: Terry Van Belle and agent contributors. [CLOUD_DRIVER.md](https://github.com/terryvanbelle/battlecode22-vibe/blob/b1d36b4d82f931b37385e45e87eeecf92df54782/CLOUD_DRIVER.md). Claude Code driver and match-worker operating procedure; infrastructure not provisioned or tested for this review. Accessed September 11, 2026.
+
+[^86]: Terry Van Belle and agent contributors. [Battlecode 2026 BENCHMARK.md](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/BENCHMARK.md). Opponent origins and stated access policy, including the anicolao bot. Accessed September 11, 2026.
+
+[^87]: Terry Van Belle and agent contributors. [Battlecode 2026 TRAINING_LOG.md](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/TRAINING_LOG.md). Sections “External benchmark suite added” and “Benchmark baseline for g_iter14”; log extends through Iteration 252. Reported outcomes not reproduced. Accessed September 11, 2026.
+
+[^88]: Terry Van Belle and agent contributors. [ReplayDump.java](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/tools/replaydump/ReplayDump.java), [test_replaydump.py](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/tools/test_replaydump.py), and [tools README](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/tools/README.md). Implementation and documentation differ in their account of available features. Accessed September 11, 2026.
+
+[^89]: Terry Van Belle and agent contributors. [Battlecode 2025 TRAINING_ALGORITHM.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/TRAINING_ALGORITHM.md). Ground-truth checks, opponent pool, measurement doctrine, and staged iteration. Accessed September 11, 2026.
+
+[^90]: Terry Van Belle and agent contributors. [Battlecode 2025 MULTI_AGENT.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/MULTI_AGENT.md). Protocol, isolation boundaries, context cycling, and September 10 amendments; not an independently verified isolation guarantee. Accessed September 11, 2026.
+
+[^91]: Terry Van Belle and agent contributors. [OBJECTIVE.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/OBJECTIVE.md). September 10, 2026 revision from rival-relative improvement to absolute strength. Accessed September 11, 2026.
+
+[^92]: Terry Van Belle and agent contributors. [Benchmark HISTORY.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/benchmarks/HISTORY.md). Runs 20260910-0149 and 20260911-1112; repository-reported results attached to build identifiers. Accessed September 11, 2026.
+
+[^93]: Terry Van Belle and agent contributors. [bot_identity.py](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/tools/bot_identity.py). Source comparison and run-launch identity. Accessed September 11, 2026.
+
+[^94]: Terry Van Belle and agent contributors. [tournament.sh](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/tools/tournament.sh). Source export, isolated compile checks, forfeits, and protection against editing an executing shell script. Accessed September 11, 2026.
+
+[^95]: Terry Van Belle and agent contributors. [agent-watchdog.sh](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/tools/agent-watchdog.sh). External liveness checking and coordinator recovery; source inspection only. Accessed September 11, 2026.
+
+[^96]: Terry Van Belle and agent contributors. [METHODS.md](https://github.com/terryvanbelle/battlecode25-vibe/blob/3e3e14db5aa5152247bed793f6aa9520390af1cf/METHODS.md). Cross-lineage methodological evidence, correction policy, and information boundaries. Accessed September 11, 2026.
+
+[^97]: Terry Van Belle and agent contributors. [compare_gauntlets.py](https://github.com/terryvanbelle/battlecode26-vibe/blob/f8b127aeabc65a7875c6da3dcc6e79a5fb170a02/tools/compare_gauntlets.py). Pair keys, intersection-only comparison, and secondary round-delta metric. Accessed September 11, 2026.
+
+[^98]: jmerle/battlecode-2022 contributors. [jmerle/battlecode-2022: README.md](https://github.com/jmerle/battlecode-2022/blob/f57d35495305c1c18a75f95ec4264c310867bccb/README.md). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^99]: TestSubjector/BattleCode2022 contributors. [TestSubjector/BattleCode2022: README.md](https://github.com/TestSubjector/BattleCode2022/blob/a65f1db26fb0cd5f75a91ceef866aacedcc636b3/README.md). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^100]: Srishti-Goel/Battlecode-monke contributors. [Srishti-Goel/Battlecode-monke: src/Lecture2Player](https://github.com/Srishti-Goel/Battlecode-monke/tree/bb22f742811e109d6f5bc6170225cf588fc0dc03/src/Lecture2Player). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^101]: battlecode/battlecode26-lectureplayer contributors. [battlecode/battlecode26-lectureplayer: README.md](https://github.com/battlecode/battlecode26-lectureplayer/blob/21c1bac78769b42b9f583b3e27ab8b083d501789/README.md). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^102]: AlexT101/battlecode26 contributors. [AlexT101/battlecode26: README.md](https://github.com/AlexT101/battlecode26/blob/d12dc7dbceaeda7d527166d817d1c03470cea50c/README.md). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^103]: erikji/battlecode26 contributors. [erikji/battlecode26: src/SPAARK](https://github.com/erikji/battlecode26/tree/a16431207623fa18c30e29b1ddf01e43276f31a1/src/SPAARK). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
+
+[^104]: uravt/Battlecode26 contributors. [uravt/Battlecode26: src/Version41](https://github.com/uravt/Battlecode26/tree/fb5cc3c0f7bfb8cfa49c868e2bbd04597a7e9d25/src/Version41). Primary repository referenced by Terry Van Belle’s opponent records; source availability does not reproduce a benchmark result. Accessed September 11, 2026.
