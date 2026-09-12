@@ -1,1 +1,6 @@
 node_modules/
+result
+result-*
+boot-*.log
+__pycache__/
+*.pyc

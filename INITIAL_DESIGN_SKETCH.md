@@ -6,7 +6,7 @@ bcenv should provide a reproducible, isolated environment for **two levels of AI
 
 The proposed deployment unit is a **NixOS VM image**, deployable to a provider such as Google Compute Engine (GCE). Each competitor VM uses Nix to provide its development tools, clones the selected Battlecode repository at a recorded revision, and runs its LLM agent harness inside that environment. The supervisor runs in its own isolated VM or container. This gives bcenv a concrete framework in which to develop its own infrastructure as well as competitive bots.
 
-This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves [VISION.md](VISION.md) and draws on [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md). The image definitions, provider adapter, and agent services described here remain to be implemented.
+This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves [VISION.md](VISION.md) and draws on [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md). The initial image definitions, configurable agent service, and VM checks are now implemented as described in [Cloud images](docs/IMAGES.md). The provider adapter and real supervisor/development agent loops remain to be implemented.
 
 ## VM and container architecture
 
