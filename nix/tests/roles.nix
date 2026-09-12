@@ -40,7 +40,9 @@ pkgs.testers.runNixOSTest {
     bob = competitor;
   };
   testScript = ''
-    start_all()
+    alice.start(allow_reboot=True)
+    bob.start()
+    supervisor.start()
     for machine, role in [(supervisor, "supervisor"), (alice, "competitor"), (bob, "competitor")]:
         machine.wait_for_unit("bcenv-image-check.service")
         machine.succeed(f"bcenv-doctor | grep 'BCENV_IMAGE_READY role={role}'")

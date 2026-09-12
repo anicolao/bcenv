@@ -85,3 +85,11 @@ Repeated verbatim for the follow-up commit correcting the VM assertion.
 ```text
 OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
 ```
+
+## Prompt 14: Enable persistence test reboots
+
+Repeated verbatim for the follow-up commit enabling reboots in the NixOS test driver.
+
+```text
+OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
+```
