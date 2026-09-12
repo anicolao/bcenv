@@ -62,6 +62,7 @@
               pkgs.qemu_kvm
               pkgs.coreutils
               pkgs.gnutar
+              pkgs.gzip
               pkgs.gnugrep
             ];
             text = builtins.readFile ./scripts/test-gce-image.sh;

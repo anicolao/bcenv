@@ -14,6 +14,9 @@ let
   competitor = { pkgs, ... }: {
     imports = [ ../modules/competitor.nix ];
     environment.etc."bcenv/fixture".source = fixture;
+    # The read-only test origin is owned by root in the Nix store.
+    programs.git.enable = true;
+    programs.git.config.safe.directory = [ "${fixture}" ];
     services.bcenv.agentCommand = [
       "${pkgs.writeShellScript "fixture-agent" ''
         set -eu
@@ -44,7 +47,7 @@ pkgs.testers.runNixOSTest {
         machine.fail("su -s /bin/sh bcenv -c 'touch /etc/bcenv/forbidden'")
         machine.fail("su -s /bin/sh bcenv -c 'sudo -n true'")
         machine.succeed("test ! -S /var/run/docker.sock")
-        machine.succeed("sshd -T | grep 'passwordauthentication no'")
+        machine.succeed("sshd -T -f /etc/ssh/sshd_config | grep 'passwordauthentication no'")
     supervisor.fail("systemctl is-active bcenv-agent.service")
     for machine in [alice, bob]:
         machine.wait_for_unit("bcenv-agent.service")

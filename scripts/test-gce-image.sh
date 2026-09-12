@@ -13,6 +13,8 @@ test "${#archives[@]}" -eq 1 && test -f "${archives[0]}"
 test "$(tar -tzf "${archives[0]}")" = disk.raw
 scratch=$(mktemp -d)
 qemu_pid=''
+# Invoked by the EXIT trap, including on failure.
+# shellcheck disable=SC2329
 cleanup() {
   if [ -n "$qemu_pid" ]; then
     kill "$qemu_pid" 2>/dev/null || true

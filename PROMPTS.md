@@ -69,3 +69,11 @@ hmm. I feel like some high level description of containerization belongs near th
 ```text
 OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
 ```
+
+## Prompt 12: Correct image validation harness
+
+Repeated verbatim because this task requires a follow-up commit after CI validation.
+
+```text
+OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
+```

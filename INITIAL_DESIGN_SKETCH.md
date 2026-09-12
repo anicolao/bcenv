@@ -246,7 +246,7 @@ Distinguish two research settings. An **open-book competition campaign** can use
 
 Version the machine-readable replay-analysis schema and reject missing required fields. Keep human-readable console output separate. Test the full chain from a known replay through the extractor into the report, including a Team B campaign win and absent metrics; the predecessor's winner-label mismatch and Team A assumption are concrete regression fixtures.[^13]
 
-Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These are proposed acceptance checks; no environment or gameplay tests have yet been implemented or run by this documentation change.
+Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These remain proposed acceptance checks for season integration and long-running campaigns. The initial infrastructure tests described in [Cloud images](docs/IMAGES.md) cover image readiness, workspace setup, agent restarts, and basic VM isolation; gameplay validation remains to be implemented.
 
 ## Competitor supervision and information sharing
 
