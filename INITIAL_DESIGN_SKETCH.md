@@ -6,7 +6,7 @@ bcenv should provide a reproducible, isolated environment for **two levels of AI
 
 The proposed deployment unit is a **NixOS VM image**, deployable to a provider such as Google Compute Engine (GCE). Each competitor VM uses Nix to provide its development tools, clones the selected Battlecode repository at a recorded revision, and runs its LLM agent harness inside that environment. The supervisor runs in its own isolated VM or container. This gives bcenv a concrete framework in which to develop its own infrastructure as well as competitive bots.
 
-This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves [VISION.md](VISION.md) and draws on [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md). The image definitions, provider adapter, and agent services described here remain to be implemented.
+This is a draft architecture for review, not an implemented system or a commitment to a particular model. It serves [VISION.md](VISION.md) and draws on [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md). The initial image definitions, configurable agent service, and VM checks are now implemented as described in [Cloud images](docs/IMAGES.md). The provider adapter and real supervisor/development agent loops remain to be implemented.
 
 ## VM and container architecture
 
@@ -246,7 +246,7 @@ Distinguish two research settings. An **open-book competition campaign** can use
 
 Version the machine-readable replay-analysis schema and reject missing required fields. Keep human-readable console output separate. Test the full chain from a known replay through the extractor into the report, including a Team B campaign win and absent metrics; the predecessor's winner-label mismatch and Team A assumption are concrete regression fixtures.[^13]
 
-Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These are proposed acceptance checks; no environment or gameplay tests have yet been implemented or run by this documentation change.
+Before trusting a season integration, require checks for valid and invalid bots, every terminal outcome including ties, truncated output, timeouts, cancellation, interrupted jobs, replay parsing, and package identity. Before trusting long-running operation, exercise crash recovery, budget exhaustion, idempotent requests, and exact prompt preservation. These remain proposed acceptance checks for season integration and long-running campaigns. The initial infrastructure tests described in [Cloud images](docs/IMAGES.md) cover image readiness, workspace setup, agent restarts, and basic VM isolation; gameplay validation remains to be implemented.
 
 ## Competitor supervision and information sharing
 

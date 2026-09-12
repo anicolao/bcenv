@@ -6,7 +6,7 @@ bcenv aims to give an AI agent the tools and feedback it needs to go from a new 
 
 ## Status
 
-This project is in its initial design stage. There is no implementation or runnable environment yet. The capabilities below describe the intended direction, not features that are currently available.
+The first infrastructure implementation defines NixOS supervisor and competitor images for GCE, a pinned-checkout setup tool, and automated VM/image validation. See [Cloud images](docs/IMAGES.md) for builds, tests, and deployment. The autonomous competition loop is not implemented; the workflow below remains the intended direction.
 
 See [VISION.md](VISION.md) for the long-term objective, scope, and measures of success. Draft research and architecture proposals are in [HISTORICAL_LEARNINGS.md](HISTORICAL_LEARNINGS.md) and [INITIAL_DESIGN_SKETCH.md](INITIAL_DESIGN_SKETCH.md).
 
@@ -38,11 +38,11 @@ The environment should preserve source versions, experiment settings, and result
 - **Agent interface:** Structured actions and observations suitable for autonomous development.
 - **Competition preparation:** Validation and packaging of submission artifacts, with submission support where permitted and authorized.
 
-The draft design proposes NixOS images and Nix-managed environments, with GCE as a reference cloud provider. Agent frameworks, exact deployment tooling, and season-specific setup remain design choices; no VM images or runtime implementation are available yet.
+The draft design proposes NixOS images and Nix-managed environments, with GCE as a reference cloud provider. Agent frameworks and full season integration remain design choices. Buildable image definitions and validation tooling are described in [Cloud images](docs/IMAGES.md); cloud images are not published automatically.
 
 ## Contributing
 
-Install Node.js (version 20 or newer) and npm, then run `npm ci` to install the development tooling and activate Husky's Git hooks. This tooling enforces the development prompt record; the Battlecode environment itself is not implemented yet.
+Install Node.js (version 20 or newer) and npm, then run `npm ci` to install the development tooling and activate Husky's Git hooks. This tooling enforces the development prompt record. Use `nix develop` for infrastructure development tooling; Linux/KVM is required for the VM checks.
 
 Record every user task prompt verbatim in [PROMPTS.md](PROMPTS.md), including follow-up instructions. Preserve typos, whitespace, and punctuation. Append a numbered entry without changing any existing bytes, then stage the file with your changes. New headings may optionally include a 3–6-word summary, for example `## Prompt 4: Clarify prompt heading summaries`, above the complete verbatim prompt. If a prompt spans multiple commits, append its exact text again for each subsequent commit and note the repetition outside the prompt text.
 
