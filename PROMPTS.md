@@ -77,3 +77,11 @@ Repeated verbatim because this task requires a follow-up commit after CI validat
 ```text
 OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
 ```
+
+## Prompt 13: Handle SSH setting capitalization
+
+Repeated verbatim for the follow-up commit correcting the VM assertion.
+
+```text
+OK I rebased and merged that. let's start a new branch, set up the cloud vm images, devise some sort of testing scheme to validate them when we change them, and put up a PR with the results.
+```

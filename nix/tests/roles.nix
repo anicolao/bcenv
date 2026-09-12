@@ -47,7 +47,8 @@ pkgs.testers.runNixOSTest {
         machine.fail("su -s /bin/sh bcenv -c 'touch /etc/bcenv/forbidden'")
         machine.fail("su -s /bin/sh bcenv -c 'sudo -n true'")
         machine.succeed("test ! -S /var/run/docker.sock")
-        machine.succeed("sshd -T -f /etc/ssh/sshd_config | grep 'passwordauthentication no'")
+        ssh_config = machine.succeed("sshd -T -f /etc/ssh/sshd_config")
+        assert "passwordauthentication no" in ssh_config.lower().splitlines(), ssh_config
     supervisor.fail("systemctl is-active bcenv-agent.service")
     for machine in [alice, bob]:
         machine.wait_for_unit("bcenv-agent.service")
