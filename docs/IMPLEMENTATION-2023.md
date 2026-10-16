@@ -34,8 +34,8 @@ All six x86_64-linux `nix flake check` outputs passed after the final websocket
 fix: pinned engine/version/fixtures; 11 common/adapter Python tests; 11
 source-bound Galaxy contract tests; synthetic replay tests; offline npm/Husky
 prompt-enforcement tests; and real fixture games. The fixture check compiles and
-verifies both disclosed packages, plays a 2,000-round match, repeats with equal
-normalized replay summary, swaps slots, packages source, and rejects malformed
+verifies both disclosed packages, plays a 2,000-round match, repeats with equal extracted evidence apart from the documented random
+terminal tiebreak, swaps slots, packages source, and rejects malformed
 Java with persisted failed-build evidence. These inert fixtures freeze when
 returning from run(); they are not meaningful strategic opponents.
 
@@ -109,3 +109,15 @@ No model/effort override was selected. The actual model ID and effective effort
 are not exposed by this platform's spawn/status result and are recorded as
 unavailable, not inferred from inherited defaults. The public implementation
 branch/draft PR was separately approved; publication does not authorize merging.
+
+### CI-discovered nondeterministic tiebreak
+
+The first remote CI run exposed a faulty fixture assertion: both inert teams
+survive to a tie at round 2000, and official GameWorld.setWinnerArbitrary() uses
+unseeded Math.random(). Initial local runs happened to return equal winners.
+The test now requires the explicit coin-flip terminal reason in both logs,
+retains both actual winners in repeat-evidence.json, normalizes only game/match
+winner fields, and compares all other extracted fields. It does not patch the
+engine or claim complete outcome determinism. The four pilot games ended by
+island capture and are unaffected. Source: pinned official GameWorld.java
+lines 622–625 and Server.java lines 630–631.

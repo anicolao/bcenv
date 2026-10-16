@@ -64,6 +64,7 @@ in {
     python -c 'import json; assert json.load(open("invalid-build/artifact.json"))["status"] == "failed"'
     python ${./verify-fixture-game.py}
     mkdir -p "$out"
+    cp repeat-evidence.json "$out/"
     cp -r build-empty build-clock match-one match-repeat match-swapped submission invalid-build "$out/"
   '';
 }
