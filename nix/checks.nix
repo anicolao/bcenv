@@ -43,7 +43,16 @@ in {
     mkdir classes
     javac -source 8 -target 8 -cp ${jar} -d classes ${src}/seasons/2023/replay/*.java
     java -cp classes:${jar} ReplaySummaryTest
+    java -Xmx512m -cp classes:${jar} ReplayQueryTest
     touch "$out"
+  '';
+  replay-query = pkgs.runCommand "bcenv-replay-query" { nativeBuildInputs = [ pkgs.jdk8 bcenv pkgs.python3 ]; } ''
+    mkdir classes
+    javac -source 8 -target 8 -cp ${jar} -d classes ${src}/seasons/2023/replay/*.java
+    java -cp classes:${jar} ReplayQueryTest --write-fixture synthetic.bc23
+    python ${./verify-replay-query.py}
+    mkdir -p "$out"
+    cp -r query-integration-evidence.json synthetic.bc23 capped complete late empty broken truncated "$out/"
   '';
   fixture-game = pkgs.runCommand "bcenv-fixture-game" { nativeBuildInputs = [ bcenv pkgs.python3 ]; } ''
     export HOME="$TMPDIR"
@@ -63,8 +72,12 @@ in {
     fi
     python -c 'import json; assert json.load(open("invalid-build/artifact.json"))["status"] == "failed"'
     python ${./verify-fixture-game.py}
+    sha256sum match-one/replay.bc23 match-one/replay-summary.json > replay-before.sha256
+    bcenv replay query --replay match-one/replay.bc23 --round-start 33 --round-end 35 --limit 100 --output fixture-query
+    python -c 'import json; q=json.load(open("fixture-query/replay-query.json")); assert q["source_stream_complete"] and q["selected_records_complete"]; assert q["matches"][0]["selected_round_events"] == 3; assert len([r for r in q["records"] if r["kind"] == "team_resource_delta"]) == 6'
+    sha256sum -c replay-before.sha256
     mkdir -p "$out"
     cp repeat-evidence.json "$out/"
-    cp -r build-empty build-clock match-one match-repeat match-swapped submission invalid-build "$out/"
+    cp -r build-empty build-clock match-one match-repeat match-swapped submission invalid-build fixture-query "$out/"
   '';
 }

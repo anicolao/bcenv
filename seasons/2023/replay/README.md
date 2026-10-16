@@ -62,3 +62,29 @@ Official provenance: battlecode/battlecode23 tag `2.0.3`, commit
 `5d142a87` (full commit recorded in the package lock), `schema/battlecode.fbs`,
 `engine/src/main/battlecode/server/GameMaker.java`, and
 `engine/src/main/battlecode/util/TeamMapping.java`.
+
+## Bounded query
+
+`ReplayQuery` adds an independently selected raw-record view without changing
+`ReplaySummary` or its schema. Invoke it through `bcenv replay query` as described
+in [the tool reference](../../../docs/BC23-LOCAL.md#bounded-raw-replay-queries).
+Nix builds both classes; local exports copy the complete compiled class tree.
+The internal Java CLI is `ReplayQuery REPLAY START END ROBOT_OR_all LIMIT` and
+prints `bcenv.bc2023.replay-query.v1`. Exit 2 means invalid or incomplete input.
+
+Core validation uses the unchanged summary parser before collecting any query
+rows, including records outside the range or after the retained-record cap.
+The source hash covers the same bounded compressed byte snapshot that is parsed.
+Record kinds are initial_body, spawn, team_resource_delta, movement, action and
+death. Vector indexes are zero-based. The initial-body round 0 is an explicit
+query convention, not an official Round event. Body metadata is joined by ID
+from initial/spawn arrays and dropped after deaths; missing identity is null.
+No death location or cause is inferred. Record cap and selection completeness
+are separate from source stream and requested-round coverage.
+
+ReplayQueryTest builds multi-match synthetic official-schema fixtures with late
+rounds, spawns and deaths, signed raw targets, missing identities, gaps, invalid
+tails and caps. It cross-checks selected records using the official generated
+array accessors independently of the query's traversal. These fixtures validate
+extraction mechanics, not gameplay. A separate CLI integration check exercises
+the packaged command, provenance, failures and non-mutation.

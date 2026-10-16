@@ -41,3 +41,28 @@ the engine heap cap is 512 MiB. Trial-level bounds are in trial.json. Tool comma
 run in a minimal user/network-namespace filesystem with no host mounts or
 inherited credentials. This is not a security boundary for the agent's general
 host tools; respect the assigned-context restriction in the kickoff.
+
+For raw records beyond the first summary samples, query an explicit inclusive
+round range. Use an optional robot ID and a bounded cap; choose a new output:
+
+    ../../bcenv replay query --replay work/match-001/replay.bc23 --round-start 100 --round-end 110 --limit 1000 --output work/query-001
+    ../../bcenv replay query --replay work/match-001/replay.bc23 --round-start 100 --round-end 110 --robot-id 42 --limit 1000 --output work/query-002
+
+query-result.json records execution and input identity; replay-query.json holds
+raw records, source SHA256, matching counts, explicit truncation and coverage.
+The replay and summary are unchanged. The cap is 1–10000 (default 1000), shared
+across kinds and matches. Round 0 selects initial bodies. Later records expose
+spawn/death IDs and types, movement coordinates, action codes/names/raw targets,
+and net team deltas. Identity comes from earlier initial/spawn rows; unknown
+identity remains null. Robot filtering keeps both teams' resource delta rows.
+
+Records are ordered by match/event, then spawn, team delta, movement, action,
+death vectors, preserving each vector's row order. This does not imply temporal
+ordering between vectors within a round. Targets are not decoded. Team deltas
+are not collection or bot-local balances; movement does not identify intent.
+Nothing reconstructs world state, visibility, or bot knowledge. Inspect
+truncated, selected_records_complete, source_stream_complete, and per-match
+all_requested_positive_rounds_present separately. Missing rounds or empty
+queries do not establish absence of activity. Only core arrays are validated;
+this is not a full FlatBuffers verifier. Inputs are capped at 64 MiB compressed
+and uncompressed; the query inherits the 512 MiB heap and process timeout.
