@@ -127,3 +127,11 @@ Reply to assistant question: “May I push the implementation branch to your pub
 ```text
 Yes
 ```
+
+## Prompt 21: Preserve initial bot outcome
+
+Repeated from Prompt 13 for the factual, independently audited local-pilot result record. The competitor package and source remain unchanged and private.
+
+```text
+And see if you can get an initial bot written
+```
