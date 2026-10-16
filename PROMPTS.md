@@ -113,3 +113,17 @@ Looked good enough to be getting on with. I think that Question is whether the t
 ```text
 How's it looking
 ```
+
+## Prompt 19: Identify the pilot model
+
+```text
+Great. What actual LLM is being used for this test
+```
+
+## Prompt 20: Approve implementation draft publication
+
+Reply to assistant question: “May I push the implementation branch to your public bcenv repository and open a draft PR?” This approval covers publication, not merging implementation. The local competitor package remains frozen.
+
+```text
+Yes
+```

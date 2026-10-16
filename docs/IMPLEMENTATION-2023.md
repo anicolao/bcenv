@@ -100,3 +100,11 @@ The first release packages base/year paths together in bcenv to avoid making
 unreviewed repository/fork access decisions. Logical boundaries are explicit;
 a separately pinned year fork and clean materialization remain review/integration
 work. Cross-year reuse is an interface design goal, not yet an empirical result.
+
+### Pilot model disclosure and publication
+
+The local pilot uses a fresh native agent session, not a Codex CLI invocation.
+No model/effort override was selected. The actual model ID and effective effort
+are not exposed by this platform's spawn/status result and are recorded as
+unavailable, not inferred from inherited defaults. The public implementation
+branch/draft PR was separately approved; publication does not authorize merging.
