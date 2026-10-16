@@ -143,3 +143,47 @@ Repeated from Prompt 12 for the CI-discovered official random-tiebreak fixture c
 ```text
 Okay, great. Let's go ahead and start on implementation, even while I review the plan, and we'll see how implementation goes. Let's keep any implementation notes clear and separate from the existing  plan
 ```
+
+## Prompt 23: Discuss the configured model
+
+The following exact conversation sequence was supplied after entries 21–22, which are explicitly repeated commit markers rather than new utterances. These delayed provenance entries preserve the original user sequence after Prompt 20 without rewriting prior bytes.
+
+```text
+Let's talk about what model we'll wanna configure
+```
+
+## Prompt 24: Preserve repeated model fragment
+
+Fragment/repeated utterance, not a separate instruction to launch anything.
+
+```text
+talk about what model we'll wanna configure
+```
+
+## Prompt 25: Discuss Codex CLI model options
+
+```text
+Yeah, that's fine, but I want to talk about the model that Codex CLI will use. It seems to me that we're either gonna want 6 Astra high or 6.1 Sol high, but maybe there are other options that you think are better
+```
+
+## Prompt 26: Analyze the first trial
+
+```text
+Okay, let me know what your analysis of the first LLM trial results is
+```
+
+## Prompt 27: Publish separate planner analysis
+
+This request is handled by a separate bc-planner notes PR; it does not merge implementation or change the frozen pilot.
+
+```text
+Okay, let's put all this in our implementation notes and put that up as a PR on BC Planner for me to look at
+```
+
+## Prompt 28: Compare two CLI models
+
+This implementation iteration fixes self-contained context for a new export. Comparison launch and separate repositories are coordinated separately. The prior pilot remains unchanged.
+
+```text
+Once that PR is up, can we run the 6.1 Sol versus 6 Astra comparison in parallel in two separate repos
+```
