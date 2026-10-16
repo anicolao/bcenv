@@ -187,3 +187,134 @@ This implementation iteration fixes self-contained context for a new export. Com
 ```text
 Once that PR is up, can we run the 6.1 Sol versus 6 Astra comparison in parallel in two separate repos
 ```
+
+
+## Implementation merge source reconciliation
+
+Captured 2026-10-16. Prompt 28 is the prior bcenv source boundary. Entries 29–42 preserve exact user text from bc-planner PROMPTS.md entries 78–91 at commit 302822ecc4f711328ab995b8e346f2f971cc41ee; entries 43–49 preserve subsequent exact user transcripts supplied by the coordinating conversation. These are bounded cross-repository provenance records for the continuing implementation and model evaluation task. Duplicate mirrored deliveries are excluded; the separately supplied final fragment is retained. Available transcript text is preserved, not a claim about inaccessible audio or history. The merge authorization answers the immediately preceding question about bcenv PR #4. This provenance-only commit does not alter frozen competitor trials, the approved planner plan, or separate planner notes/process PRs.
+
+## Prompt 29: Report interrupted comparison result
+
+````text
+Looks like we got disconnected. How did the trial go
+````
+
+## Prompt 30: Clarify interrupted model comparison
+
+````text
+looks like I got disconnected again. What I want to know is how the six dot one Sol versus six Astra trial went
+````
+
+## Prompt 31: Authorize writable workspace harness
+
+````text
+All right, let's fix it by making sure that the harness has somewhere to write that's inside the workspace , uh, so it will be allowed to go
+````
+
+## Prompt 32: Consider previous writable Nix workaround
+
+````text
+Remember the workaround we did to give Nix a writable directory? Can we apply that here
+````
+
+## Prompt 33: Check workaround progress
+
+````text
+Any luck
+````
+
+## Prompt 34: Request supported execution workaround
+
+````text
+Okay, try to find a workaround
+````
+
+## Prompt 35: Ask about explicit native models
+
+````text
+Is there a way to configure the model for the thing that did work where we couldn't see what it was
+````
+
+## Prompt 36: Authorize explicit native model comparison
+
+````text
+Let's do that
+````
+
+## Prompt 37: Check native comparison progress
+
+````text
+What's the current status
+````
+
+## Prompt 38: Clarify Sol completion status
+
+````text
+So did you say Sol was finished
+````
+
+## Prompt 39: Review original bot and experiment
+
+````text
+Take a minute and read all of the code that it wrote, and try to assess whether it did a good job directly from a code review, uh, both its original implementation and the improvement test. Did it choose a good test to do? Did it do a good job of the original implementation? What do you think of its work
+````
+
+## Prompt 40: Check Astra completion status
+
+````text
+How would Astra, is it done yet
+````
+
+## Prompt 41: Resume disconnected Astra report
+
+````text
+You are trying to report on the Astra results, but you got disconnected
+````
+
+## Prompt 42: Request direct Astra code review
+
+````text
+Understood. Deep dive into Astra and see what you think
+````
+
+## Prompt 43: Ask about Astra code quality
+
+````text
+Have you looked at Astra's well, how does the code look
+````
+
+## Prompt 44: Choose the next experiment
+
+````text
+So, what's the next thing that you would want to test
+````
+
+## Prompt 45: Require an evaluation process
+
+````text
+Alright, so just like the bots you're trying to change, give yourself need a process for making these changes, evaluating them, recording your results, and so on
+````
+
+## Prompt 46: Clarify meta level design process
+
+````text
+. So what's your process going to be for designing meta level
+````
+
+## Prompt 47: Assess current implementation merge readiness
+
+````text
+So, for the current PR that's on BCN, how would you consider its state now? Is it ready to commit and then iterate on, or does it need fixes before it can be committed
+````
+
+## Prompt 48: Approve implementation merge and iteration
+
+````text
+Alright, go ahead, merge and keep iterating, and keep going until you're satisfied that you know which model we should be using
+````
+
+## Prompt 49: Preserve repeated model decision fragment
+
+````text
+satisfied that you know which model we should be using
+````
