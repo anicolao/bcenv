@@ -135,3 +135,11 @@ Repeated from Prompt 13 for the factual, independently audited local-pilot resul
 ```text
 And see if you can get an initial bot written
 ```
+
+## Prompt 22: Correct fixture repeatability check
+
+Repeated from Prompt 12 for the CI-discovered official random-tiebreak fixture correction. No competitor code or frozen pilot input is changed.
+
+```text
+Okay, great. Let's go ahead and start on implementation, even while I review the plan, and we'll see how implementation goes. Let's keep any implementation notes clear and separate from the existing  plan
+```
