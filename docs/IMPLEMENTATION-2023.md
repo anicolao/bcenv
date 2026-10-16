@@ -121,3 +121,24 @@ winner fields, and compares all other extracted fields. It does not patch the
 engine or claim complete outcome determinism. The four pilot games ended by
 island capture and are unaffected. Source: pinned official GameWorld.java
 lines 622–625 and Server.java lines 630–631.
+
+### New export after pilot 001
+
+The user requested a separately reviewed analysis PR in bc-planner and then a
+parallel two-repository CLI-model comparison. The notes were published in
+[bc-planner PR #9](https://github.com/anicolao/bc-planner/pull/9). This bcenv
+iteration fixes the first pilot's missing instruction references in a **new**
+export without changing its runtime code or kickoff. It supplies manifest.json,
+trial.json, a local-launcher tool reference and pilot-specific common/year
+skills. The materializer test verifies every declared path, empty candidate/work
+state, identical kickoff, hashes, no unrelated store-root data, and refusal to
+overwrite an existing export. Twelve Python tests now pass.
+
+New export 002 release.json SHA-256:
+`710265c659a519e33da55c067e457fb1a29c18256e82dcefe0930404b37113d0`.
+The CLI runner is external and preinstalled; it is not falsely represented as a
+new Nix installation or part of this frozen engine closure. Comparison setup,
+model metadata and results are recorded separately by its launcher/observer.
+Both model runs must receive identical revised exported context; neither may
+inherit pilot 001's candidate or results. The earlier result remains associated
+with its original inputs, not retrospectively attributed to this revision.

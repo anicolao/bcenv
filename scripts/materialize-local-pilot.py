@@ -40,15 +40,35 @@ shutil.copyfile(bcenv / 'seasons/2023/adapter.py', root / 'opt/bcenv/seasons/202
 shutil.copytree(bcenv / 'replay-classes', root / 'opt/bcenv/replay-classes')
 shutil.copytree(engine / 'battlecode23', root / 'opt/battlecode23')
 shutil.copytree(engine / 'doc/battlecode23', workspace / 'reference')
-shutil.copytree(source / 'skills', workspace / 'skills')
+shutil.copytree(source / 'runbooks/local-pilot/skills', workspace / 'skills')
+shutil.copytree(source / 'runbooks/local-pilot/docs', workspace / 'docs')
+year = json.loads((source / 'seasons/2023/manifest.json').read_text())
+(workspace / 'manifest.json').write_text(json.dumps({
+    'schema': 'bcenv.local-pilot-manifest.v1', 'season': '2023',
+    'engine': year['engine'], 'interface': year['interface'],
+    'runtime_package': a.bcenv, 'rules': 'reference/specs/',
+    'api': ['reference/api/', 'reference/api-source/'],
+    'skills': ['skills/common/SKILL.md', 'skills/2023/SKILL.md'],
+    'tools': 'docs/BC23-LOCAL.md', 'trial': 'trial.json',
+    'candidate_supplied': False, 'fixture': 'official inert testplayerempty'}, indent=2) + '\n')
+(workspace / 'trial.json').write_text(json.dumps({
+    'schema': 'bcenv.local-pilot-spec.v1', 'scope': 'local-only diagnostic',
+    'minutes': 20, 'max_matches': 12, 'concurrency': 1,
+    'map': '/opt/battlecode23/maps/DefaultMap.map23',
+    'fixture_package': 'testplayerempty', 'required_sides': ['A', 'B'],
+    'required_work': ['own legal source', 'official verified build', 'both sides',
+                      'prediction before own change', 'replay evidence', 'verified source package', 'final report'],
+    'writable_paths': ['competitor/', 'work/'], 'network': 'none',
+    'replica_required': False, 'viewer_required': False,
+    'stop_on': ['workflow complete', 'time limit', 'match limit', 'unrecoverable environment failure'],
+    'model_configuration': 'recorded separately by external launcher'}, indent=2) + '\n')
 shutil.copyfile(source / 'prompts/2023/local-pilot.txt', out / 'KICKOFF.txt')
-# Scored-trial readiness blocks in the general skills do not apply to this
-# explicitly limited diagnostic pilot. Preserve those files, explain scope here.
 (workspace / 'START_HERE.md').write_text('''# Local-only BC23 diagnostic pilot
 
 This pilot is authorized to build an initial bot before the replica is ready.
-The full acceptance trial is still blocked; those warnings in general skills
-refer to that full trial. Follow KICKOFF.txt's narrower local-only task.
+Read manifest.json, trial.json, docs/BC23-LOCAL.md and both packaged skills.
+These files are complete local-pilot instructions; full replica/clean-room
+acceptance is a separate task. Follow KICKOFF.txt's local-only task.
 
 All editable files are here under competitor/ and work/. The host-visible path
 is this workspace directory. The launcher runs with this directory as /workspace
