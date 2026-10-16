@@ -1,0 +1,46 @@
+{
+  "episode": {
+    "name": "bc23",
+    "language": "java8",
+    "scaffold": "file:///fixture/scaffold"
+  },
+  "metadata": {
+    "report-url": "https://replica.invalid/api/compete/2023/match/31/report/",
+    "task-type": "execute"
+  },
+  "details": {
+    "a": {
+      "source": {
+        "bucket": "fixture-secure",
+        "name": "episode/bc23/submission/11/source.zip"
+      },
+      "binary": {
+        "bucket": "fixture-secure",
+        "name": "episode/bc23/submission/11/binary.zip"
+      },
+      "team-name": "Synthetic A",
+      "package": "fixture"
+    },
+    "b": {
+      "source": {
+        "bucket": "fixture-secure",
+        "name": "episode/bc23/submission/12/source.zip"
+      },
+      "binary": {
+        "bucket": "fixture-secure",
+        "name": "episode/bc23/submission/12/binary.zip"
+      },
+      "team-name": "Synthetic B",
+      "package": "fixture"
+    },
+    "maps": [
+      "FixtureMapOne",
+      "FixtureMapTwo"
+    ],
+    "replay": {
+      "bucket": "fixture-secure",
+      "name": "episode/bc23/replays/00000000-0000-0000-0000-000000000031.bc23"
+    },
+    "alternate-order": true
+  }
+}

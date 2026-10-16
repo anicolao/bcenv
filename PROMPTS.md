@@ -63,3 +63,53 @@ did my repositories lead you to also look at Terry Van Belle's efforts in this a
 ```text
 hmm. I feel like some high level description of containerization belongs near the top of the design sketch. I'm imagining a nixos VM image that can be deployed to a VM provider like GCE, which inside it uses nix to set up the tooling and environment for cloning the battlecode repository, and inside that does the battlecode development. The LLM doing the battlecode development should run inside that environment, but a second LLM is needed to create the VMs, set things up for the specific competition, and kick off and monitor the internal development loop. This outer LLM shoudl be able to supervise multiple competitors and evaluate their work and report back to the human about the outcomes; and it itself ideally would run in yet another container or VM that is isolated. I think Terry's setup is like this and even my past setups are more like this using either docker or nix to isolate concerns. let's update to include these ideas and make them prominent. we need a good frmework to work in to iterate on bcenv itself.
 ```
+
+## Prompt 11: Review current Battlecode status
+
+Preceding task-related utterance supplied by the coordinating conversation. Repeated voice mirrors are not separate user instructions.
+
+```text
+Great. I need you to remind me where we're at on the Battlecode project. What's the last thing we did, and what are you waiting  for
+```
+
+## Prompt 12: Begin separate environment implementation
+
+```text
+Okay, great. Let's go ahead and start on implementation, even while I review the plan, and we'll see how implementation goes. Let's keep any implementation notes clear and separate from the existing  plan
+```
+
+## Prompt 13: Request an initial bot
+
+```text
+And see if you can get an initial bot written
+```
+
+## Prompt 14: Check ongoing implementation
+
+```text
+Okay, so you're still working on more there
+```
+
+## Prompt 15: Confirm reviewing the plan
+
+```text
+Okay, I've had a chance to read PR number 8 now
+```
+
+## Prompt 16: Approve merging the plan
+
+```text
+You can re-base and merge it onto main, consider it approved
+```
+
+## Prompt 17: Prioritize competitor readiness
+
+```text
+Looked good enough to be getting on with. I think that Question is whether the tests you're running now actually enable the LLM to start implementing a bot for BC23
+```
+
+## Prompt 18: Check implementation progress
+
+```text
+How's it looking
+```

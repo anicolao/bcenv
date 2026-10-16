@@ -1,0 +1,23 @@
+{
+  "episode": {
+    "name": "bc23",
+    "language": "java8",
+    "scaffold": "file:///fixture/scaffold"
+  },
+  "metadata": {
+    "report-url": "https://replica.invalid/api/compete/2023/submission/11/report/",
+    "task-type": "compile"
+  },
+  "details": {
+    "source": {
+      "bucket": "fixture-secure",
+      "name": "episode/bc23/submission/11/source.zip"
+    },
+    "binary": {
+      "bucket": "fixture-secure",
+      "name": "episode/bc23/submission/11/binary.zip"
+    },
+    "team-name": "Synthetic A",
+    "package": "fixture"
+  }
+}

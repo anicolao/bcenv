@@ -1,0 +1,8 @@
+{
+  "accepted": false,
+  "invocation": {
+    "status": "OK!",
+    "logs": "fixture compilation rejected\n",
+    "interrupted": false
+  }
+}
