@@ -1,0 +1,63 @@
+{
+  "schema": "bcenv.season.v1",
+  "season": "2023",
+  "interface": "bcenv.artifact.v1",
+  "status": "builder-foundation-not-trial-ready",
+  "target": "x86_64-linux",
+  "base_parent_commit": "7f868dc561667a336e7eeba65ea89167d7716fa1",
+  "source_plan": {
+    "url": "https://github.com/anicolao/bc-planner/pull/8",
+    "commit": "607bb821b4ff27dd10e58f64249e8a8df8e8d682",
+    "approval": "approved-and-separately-merged",
+    "merged_commit": "7bf66b0122e06432ca53f43443f5bfe071335720"
+  },
+  "engine": {
+    "version": "2.0.3",
+    "repository": "https://github.com/battlecode/battlecode23",
+    "commit": "5d142a87579af22c2c04ce046a3cbd448dc1869e",
+    "jar_sha256_sri": "sha256-XoYqoQ6FyutnrmnhaS90UYk+gB4NgVlwMsFEK7ud604="
+  },
+  "galaxy": {
+    "repository": "https://github.com/battlecode/galaxy",
+    "commit": "51762ec8b982132c250aa5a603978bc7147eae67",
+    "status": "contract-inspection-only-no-running-replica"
+  },
+  "candidate": {
+    "supplied": false,
+    "builder_strategy": false
+  },
+  "fixtures": {
+    "origin": "official-engine-instrumenter-tests",
+    "packages": [
+      "testplayerempty",
+      "testplayerclock"
+    ],
+    "use": "readiness-only"
+  },
+  "paths": {
+    "base_contract": "contracts/artifacts-v1.md",
+    "common_skill": "skills/common/SKILL.md",
+    "season_skill": "skills/2023/SKILL.md",
+    "kickoff": "prompts/2023/kickoff.txt"
+  },
+  "trial_launch": {
+    "allowed": false,
+    "blockers": [
+      "running Galaxy submission/scheduling replica",
+      "official viewer cross-check",
+      "complete replay state reconstruction",
+      "read-only measured inputs and observer isolation",
+      "approved numerical trial specification",
+      "fresh session with recorded visible inputs"
+    ]
+  },
+  "local_pilot": {
+    "status": "separately-authorized-diagnostic-only",
+    "kickoff": "prompts/2023/local-pilot.txt",
+    "limits": {
+      "minutes": 20,
+      "matches": 12
+    },
+    "full_acceptance_claim": false
+  }
+}

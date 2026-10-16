@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/battlecode/galaxy",
+  "revision": "51762ec8b982132c250aa5a603978bc7147eae67",
+  "files": {
+    "backend/environment.yml": "f9ce480d3c2acde322f7c73033fc847c8254fa3f0057b679766328514bc3805a",
+    "saturn/go.mod": "443777363e56efb99c29db121e24b72c3499211246309146e18d9eb70c75d452",
+    "saturn/go.sum": "7b314e74eac53fd5adca86c8e456297db4e1b8436564b6d5c4b1a3580a2a21f8",
+    "backend/siarnaq/api/compete/models.py": "1d45df016f112d444382ba6ce3d25e481588bb82a132dd859c0a6cbac10174c9",
+    "backend/siarnaq/api/compete/serializers.py": "45119c729304d6bdc067f248438ba7f01ffa5578ceefb12d856ffb8d1b0bb4a4",
+    "backend/siarnaq/api/compete/managers.py": "4959d99b84a99592271893d8278f27daf405c09530a1e3b8c3233e069d6ce5c7",
+    "backend/siarnaq/api/compete/urls.py": "7966e729d1b8a8010b88153257c194490f025f07a0057f10ddd3948c41e8f5e6",
+    "backend/siarnaq/api/compete/views.py": "1819514de9c0b072686ea233299a711e8824f46503873f1f05de0b08376b01a3",
+    "backend/siarnaq/api/episodes/models.py": "0498fa77a962cc9455324482d0fc3706bff98c396cb60ef80aa86f1be81fa3b9",
+    "backend/siarnaq/gcloud/saturn.py": "12e4b52ac3cb5008e796236e7185d389c74544f9366dcff5a4a9e08567395c88",
+    "backend/siarnaq/settings.py": "f38b5883a0380bfbca18cfee8e40f673fff94ad7c3a47ae4b77ab3cd1dc91aea",
+    "saturn/pkg/saturn/task.go": "782a1c1f2e695bb7ee3213f4fa031ea559670f572f5b8053cfac44295cbb4f84",
+    "saturn/pkg/saturn/report.go": "cedd3413887525f012363ec2c430759bd2583ec548434ba7a8b84e536a2c083d",
+    "saturn/pkg/saturn/queue.go": "6f8f88507a8d067dbe6efadda515f9dd4953ef9b9ef2dce90b5fb6f5b6d921cf",
+    "saturn/pkg/run/protocol.go": "06c1530358d14e70649edb99b724554b7a380e0c8b4ec36ee7a3a4a983716201",
+    "saturn/pkg/run/java8.go": "48e611b86ce130d1dd954acce7b1a39f9a20e604ae32108bb8c974821fcd44b1",
+    "saturn/pkg/run/scaffold.go": "26144352128c08cf5f3b30909fe045a5682e467f19e222a986de96426f7b5788",
+    "saturn/pkg/run/file.go": "559c37d57a5ada03f511e1405abc7ba8bd9ea4afe118f0375cacb27c438a778a"
+  }
+}

@@ -61,3 +61,9 @@ bcenv is licensed under the [GNU General Public License, version 3 (GPLv3)](LICE
 SPDX license identifier: `GPL-3.0-only`.
 
 Battlecode engines, starter kits, and other third-party dependencies remain subject to their respective licenses.
+
+## BC23 implementation foundation
+
+See [implementation status](docs/IMPLEMENTATION-2023.md), [local tools](docs/BC23-LOCAL.md),
+and [replica gates](docs/REPLICA-2023.md). This is separate from the proposed
+[bc-planner experiment plan](https://github.com/anicolao/bc-planner/pull/8).
