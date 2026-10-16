@@ -79,7 +79,8 @@ the frozen materialization. Pilot kickoff SHA-256:
 Runtime package: `/nix/store/zrr2chl185cs2fg46knlhkk9nqgwh1pc-bcenv-2023-0.1.0`.
 Builder preflight evidence was removed from the agent-visible filesystem before
 launch and preserved separately. No mid-run edits, coaching or rescue are
-permitted. Results are pending and will be reported separately after termination.
+permitted. The pilot completed and passed independent artifact checks; see
+[PILOT-001.md](PILOT-001.md) for the bounded result and remaining gaps.
 
 ## Deliberate staging and remaining gates
 
