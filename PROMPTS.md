@@ -318,3 +318,15 @@ Alright, go ahead, merge and keep iterating, and keep going until you're satisfi
 ````text
 satisfied that you know which model we should be using
 ````
+
+## Prompt 50: Require useful model performance
+
+````text
+and that you feel that model is doing a good job inside the environment as you defined it
+````
+
+## Prompt 51: Iterate and report completion
+
+````text
+Alright, you can iterate on that and notify me when you're done
+````

@@ -185,6 +185,45 @@ def pack(args):
     return 0
 
 
+def replay_query(args):
+    # Validate before allocating output or launching a process.
+    if not 0 <= args.round_start <= args.round_end <= 2147483647:
+        raise ValueError('round bounds require 0 <= start <= end <= 2147483647')
+    if args.robot_id is not None and not 0 <= args.robot_id <= 2147483647:
+        raise ValueError('robot ID must be between 0 and 2147483647')
+    if not 1 <= args.limit <= 10000:
+        raise ValueError('record limit must be between 1 and 10000')
+    replay = Path(args.replay).resolve()
+    if not replay.is_file() or replay.stat().st_size > 64 * 1024 * 1024:
+        raise ValueError('replay must be a regular file no larger than 64 MiB')
+    rt = runtime()
+    cp = os.environ.get('BCENV_REPLAY_CLASSPATH')
+    if not cp:
+        raise ValueError('Pinned replay classes are missing')
+    before = digest(replay)
+    out = new_output(args.output)
+    process = execute([rt['BCENV_JAVA'], '-Xmx512m', '-cp', cp, 'ReplayQuery', str(replay),
+        str(args.round_start), str(args.round_end), 'all' if args.robot_id is None else str(args.robot_id),
+        str(args.limit)], out / 'replay-query.json', args.timeout, stderr=out / 'replay-query.log')
+    result = {'schema': VERSION, 'kind': 'replay-query', 'season': '2023',
+        'engine_sha256': digest(rt['BCENV_ENGINE_JAR']),
+        'replay': {'path': str(replay), 'sha256': before}, 'process': process,
+        'status': 'timeout' if process['status'] == 'timeout' else 'failed'}
+    try:
+        query = json.loads((out / 'replay-query.json').read_text())
+        if (process['status'] == 'succeeded' and query.get('format') == 'bcenv.bc2023.replay-query.v1'
+                and query.get('status') == 'complete' and query.get('source_replay', {}).get('sha256') == before):
+            result['status'] = 'completed'
+            result['truncated'] = query['truncated']
+    except (ValueError, UnicodeError, AttributeError) as error:
+        result['parse_error'] = str(error)
+    if not replay.is_file() or digest(replay) != before:
+        result['status'] = 'input_mutated'
+    write(out / 'query-result.json', result)
+    print(out / 'query-result.json')
+    return 0 if result['status'] == 'completed' else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -196,6 +235,17 @@ def main():
     for p in sub.choices.values():
         p.add_argument('--output', required=True)
         p.add_argument('--timeout', type=int, default=120)
+    p = sub.add_parser('replay')
+    replay_sub = p.add_subparsers(dest='replay_command', required=True)
+    p = replay_sub.add_parser('query')
+    p.add_argument('--replay', required=True)
+    p.add_argument('--round-start', required=True, type=int)
+    p.add_argument('--round-end', required=True, type=int)
+    p.add_argument('--robot-id', type=int)
+    p.add_argument('--limit', type=int, default=1000)
+    p.add_argument('--output', required=True)
+    p.add_argument('--timeout', type=int, default=120)
+    p.set_defaults(fn=replay_query)
     args = parser.parse_args()
     if not 1 <= args.timeout <= 600:
         parser.error('timeout must be between 1 and 600 seconds')

@@ -44,3 +44,46 @@ acquisition, not a demonstrated bit-for-bit rebuild of the official JAR from
 source. The upstream source does not declare one repository-wide engine license;
 component notices are preserved without claiming the whole engine uses a
 component's license. Review redistribution terms before external distribution.
+
+## Bounded raw replay queries
+
+    bcenv replay query --replay work/match-001/replay.bc23 --round-start 100 --round-end 110 --limit 1000 --output work/query-001
+    bcenv replay query --replay work/match-001/replay.bc23 --round-start 100 --round-end 110 --robot-id 42 --limit 1000 --output work/query-002
+
+The round range is inclusive and applies independently to every match in the
+replay. Round 0 selects initial map bodies, distinct from later spawn records.
+Robot filtering selects that ID's spawn, movement, action, and death records;
+team resource rows remain for both teams and are explicitly team-scoped.
+Identity/type fields come from initial/spawn records, including earlier rounds
+outside the query. Unknown identities remain null. Match IDs prevent accidental
+cross-match attribution. IDs are not interpreted as persistent across matches.
+
+A new output directory contains `query-result.json` (process status and input
+identity), `replay-query.json` (records, coverage and semantics), and
+`replay-query.log`. The source replay and existing summary are never rewritten.
+The query hashes the exact compressed snapshot it parsed; the adapter also
+checks the input hash before and after execution. Missing/invalid/incomplete
+replays fail explicitly. This adds no new match or strategy behavior.
+
+`--limit` defaults to 1000 and must be 1–10000. It caps records across all kinds
+and matches, not each category separately. `matching_record_count` and
+`matching_counts_by_kind` cover every matching core record in the source even
+when the retained prefix is capped. `truncated` is explicit;
+`selected_records_complete` means the selected records present in the source
+were all returned. Separately inspect `source_stream_complete` and per-match
+`all_requested_positive_rounds_present`: a missing round is not proof that
+nothing happened, and a complete empty selection can lie outside the replay.
+
+Each record includes the original event and vector row indexes. Presentation
+order is match/event order, then spawn, team delta, movement, action, death
+vectors. It does not establish temporal ordering between those vectors within
+a round. Movement coordinates are new recorded positions, not intended paths.
+Actions retain the official code, name and raw target without interpretation.
+Team resource deltas are net team changes, not collection, spending, balances,
+or bot-local resources. The output never reconstructs visibility or bot knowledge.
+
+Both compressed and uncompressed input are capped at 64 MiB; core validation
+covers at most 100000 events, 100 matches and 5000000 core records. The Java
+query process uses a 512 MiB heap and the usual `--timeout` bound. As with the
+summary, this is not a full FlatBuffers verifier; unextracted schema fields are
+not validated. See [replay semantics](../seasons/2023/replay/README.md).
