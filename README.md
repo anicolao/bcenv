@@ -77,3 +77,7 @@ closed public results and synthetic adversarial tests. This is a non-executing
 scaffold outside the competitor runtime, not a deployed service or enforced agent
 boundary. Real heldouts are unsupported; replay learning and durable execution
 remain implementation gates.
+
+[Fixed-tool controller simulation](contracts/controller-v1.md) exercises a
+provider-neutral transport seam and bounded workspace/scrimmage dispatch using
+synthetic adapters. No real inference or enforced sandbox is implemented.
