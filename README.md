@@ -67,3 +67,5 @@ Battlecode engines, starter kits, and other third-party dependencies remain subj
 See [implementation status](docs/IMPLEMENTATION-2023.md), [local tools](docs/BC23-LOCAL.md),
 and [replica gates](docs/REPLICA-2023.md). This is separate from the proposed
 [bc-planner experiment plan](https://github.com/anicolao/bc-planner/pull/8).
+
+- [Authentic lecture-opponent diagnostic and export](docs/LECTURE-TRIAL-001.md)

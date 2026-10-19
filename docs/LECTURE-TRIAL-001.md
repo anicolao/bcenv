@@ -2,8 +2,9 @@
 
 Implementation/evaluation notes, separate from the approved full experiment plan.
 This branch depends on the unmerged bounded-replay-query PR5 (4d9813ac022a4be94686cf7d39cdb40edb5eec33).
-It neither merges that PR nor claims replica/clean-room acceptance. Planner PR10
-remains a reviewable process proposal, not a prerequisite implicitly approved here.
+It neither merges that PR nor claims replica/clean-room acceptance. Planner PR10 was initially reported as unmerged; a later read-only check found it
+had been externally merged at2026-10-19T21:08:00Z, before this run. This task did not
+merge it. The original pre-launch protocol remains preserved at commit3b648e2.
 
 ## Preregistered before launch
 
@@ -80,4 +81,23 @@ namespace/chroot with no host binds; this is not an untrusted-code security clai
 
 ## Results
 
-Pending launch. Do not interpret this preregistration as completed evidence.
+Completed one fresh gpt-6.1-sol/high attempt, eight competitor games and four
+observer holdout games. The agent autonomously retrieved/verified/built the official
+source opponent, authored its own baseline, preregistered a launcher standoff test,
+and retained negative evidence. Development geometric close exposure fell from
+50/114 to30/107, while attack counts remained339→342. Rectangle holdout reduced
+47/100 to45/106, a much smaller effect. These are position-exposure proxies, not
+proof of survival or tournament strength. Direct review found material carrier
+state/progress and movement-scoring defects despite successful games.
+
+Full results, source snapshots, exact kickoff/lineage and all twelve replays are
+prepared in bc-planner's2023-lecture-opponent-results.md and
+experiments/bcenv/runs/BCENV-002/. Publication is separately pending approval;
+local results must not be described as already publicly linked. No candidate code
+was supplied, edited or coached by the environment builder during execution.
+
+The pinned query runtime and copied new runbooks/catalog/kickoff have distinct
+identities, explicitly retained in the release manifest. All five Nix readiness
+checks passed; source/binary/replay/package audit found zero mismatches. Agent
+isolation remained behavioral. The initial pre-launch protocol is immutable at
+3b648e2b2f40e5fcd826b89083bfb361f191bae6; this results section is a later annotation.

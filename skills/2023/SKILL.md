@@ -33,3 +33,15 @@ foundation release. Submission/scheduling has no usable command yet. Do not
 contact the live competition site or invent endpoint access. This blocks a full
 fresh-agent trial; consult the implementation status rather than claiming the
 kickoff complete.
+
+## Active practice opponents
+
+For actual practice, the authentic official BC23 lecture bot is a useful active
+opponent; inert fixtures only establish tool readiness. Source provenance is pinned
+in seasons/2023/lecture-opponent.json. Discover/retrieve its separate source package,
+retain its upstream license, and build/verify it yourself before playing both sides.
+Do not silently substitute a different-year bot or edit the test opponent. Educational
+code has limitations; passing against it does not establish tournament strength.
+The separately bounded lecture-trial export provides a source-only offline catalog
+and its own complete kickoff/skills; see docs/LECTURE-TRIAL-001.md. This does not
+remove the full-replica readiness gates above.
