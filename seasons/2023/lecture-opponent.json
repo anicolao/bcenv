@@ -1,0 +1,19 @@
+{
+  "schema": "bcenv.opponent-source.v1",
+  "repository": "https://github.com/battlecode/battlecode23-lectureplayer",
+  "commit": "57063ad07b2311c21c99ba7be100a55fcdb3de6b",
+  "commit_time": "2023-01-20T02:46:15Z",
+  "package": "lectureplayer",
+  "source_root": "src",
+  "license": "AGPL-3.0",
+  "license_scope": "upstream repository; keep separate from bcenv GPL-3.0-only tooling",
+  "files": {
+    "LICENSE": "76a97c878c9c7a8321bb395c2b44d3fe2f8d81314d219b20138ed0e2dddd5182",
+    "src/lectureplayer/CarrierStrategy.java": "5da0dd915314f76a580893bc72214daae7e03b4fde12a653e8de5af847bc987a",
+    "src/lectureplayer/Communication.java": "75b248f1ca80e36df5d6d5208530be147eda18edf3190568cda4b0870a346645",
+    "src/lectureplayer/LauncherStrategy.java": "00d792565a48f713b8141a41bfa0e66c41643d20673eba1496df2678fff61af4",
+    "src/lectureplayer/OptimalResource.java": "a59fe49815ff9611dd5ea7c72047a1b4aaa27fcd3686aec6dcfc7d6adcfe0ead",
+    "src/lectureplayer/Pathing.java": "44c5022c385370b2f093e33f4cc1182209d5efdc81ddfb98e993095aaf19b168",
+    "src/lectureplayer/RobotPlayer.java": "7777eae1b68a466b7165b643dca1ddc0c32c597edd0c5d259b7496cde3260480"
+  }
+}
