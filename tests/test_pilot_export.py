@@ -23,6 +23,7 @@ class PilotExportTests(unittest.TestCase):
             engine = store / 'nix/store/engine/share'
             (engine / 'battlecode23').mkdir(parents=True)
             (engine / 'battlecode23/engine.jar').write_text('synthetic fixture')
+            (engine / 'battlecode23/version').write_text('2.0.3\n')
             for folder in ['api', 'api-source', 'specs']:
                 (engine / 'doc/battlecode23' / folder).mkdir(parents=True)
             for dependency in ['python', 'jdk']:
@@ -53,6 +54,12 @@ class PilotExportTests(unittest.TestCase):
             self.assertFalse(any('unrelated-secret' in str(p) for p in out.rglob('*')))
             # Export cannot reset an existing competitor lineage in place.
             self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            (engine / 'battlecode23/version').write_text('3.0.13\n')
+            command[-1] = str(temp / 'wrong-engine-export')
+            rejected = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('diagnostic engine', rejected.stderr)
+            self.assertFalse((temp / 'wrong-engine-export').exists())
 
 
 if __name__ == '__main__':

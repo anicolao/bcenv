@@ -1,6 +1,6 @@
 # BC2023 replay evidence
 
-`ReplaySummary` is a Java 8 CLI compiled against the pinned official 2.0.3
+`ReplaySummary` is a Java 8 CLI compiled against the pinned official 3.0.13
 engine JAR and its generated `battlecode.schema` classes. It reads a gzip
 `.bc23` GameWrapper and prints one JSON object to stdout. Exit 0 means a
 structurally complete event stream for the fields examined; exit 2 means
@@ -43,7 +43,9 @@ into this repository. JSON `format` is `bcenv.bc2023.replay-summary.v1`.
 Compressed and uncompressed input are each capped at 64 MiB. There are at most
 100,000 event wrappers, 100 matches, 100,000 live body IDs per match, and
 5,000,000 processed core records.
-The header must declare the pinned spec version `2.0.3`.
+The header must declare `GameConstants.SPEC_VERSION` from the exact engine JAR
+used to compile the parser: `3.0.13` for the active package, or `2.0.3` for the
+explicit historical diagnostic package. Cross-version headers are rejected.
 Parallel extracted arrays, event ordering, match index vectors, team IDs,
 action codes, increasing round IDs, and gzip integrity are checked. Invalid
 input emits an error object without partially trusted metrics. Run with a
@@ -58,8 +60,8 @@ Tests build tiny synthetic records with the official FlatBuffers builders;
 they establish extraction mechanics, not engine gameplay validity. End-to-end
 engine replays must also be smoke-tested by the runner.
 
-Official provenance: battlecode/battlecode23 tag `2.0.3`, commit
-`5d142a87` (full commit recorded in the package lock), `schema/battlecode.fbs`,
+Official provenance: battlecode/battlecode23 tag `3.0.13`, commit
+`9b890f83672c98b81cc153f618bd56e1ab6134b5` (full commit recorded in the package lock), `schema/battlecode.fbs`,
 `engine/src/main/battlecode/server/GameMaker.java`, and
 `engine/src/main/battlecode/util/TeamMapping.java`.
 
@@ -88,3 +90,8 @@ tails and caps. It cross-checks selected records using the official generated
 array accessors independently of the query's traversal. These fixtures validate
 extraction mechanics, not gameplay. A separate CLI integration check exercises
 the packaged command, provenance, failures and non-mutation.
+
+The 21 generated schema class files are byte-identical between the released
+2.0.3 and 3.0.13 JARs. This validates schema continuity, not game-rule equivalence.
+The source and runtime rule differences are recorded in
+[engine migration](../../../docs/ENGINE-MIGRATION-2023.md).

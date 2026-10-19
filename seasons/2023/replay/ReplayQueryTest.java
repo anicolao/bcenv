@@ -1,4 +1,5 @@
 import battlecode.schema.*;
+import battlecode.common.GameConstants;
 import com.google.flatbuffers.FlatBufferBuilder;
 import java.io.*;
 import java.nio.*;
@@ -23,7 +24,7 @@ public final class ReplayQueryTest {
         int a = TeamData.createTeamData(b, b.createString("A"), b.createString("alpha"), (byte)1);
         int z = TeamData.createTeamData(b, b.createString("B"), b.createString("beta"), (byte)2);
         int teams = GameHeader.createTeamsVector(b, new int[]{z, a});
-        events.add(EventWrapper.createEventWrapper(b, Event.GameHeader, GameHeader.createGameHeader(b, b.createString("2.0.3"), teams, 0, 0)));
+        events.add(EventWrapper.createEventWrapper(b, Event.GameHeader, GameHeader.createGameHeader(b, b.createString(GameConstants.SPEC_VERSION), teams, 0, 0)));
         for (int match = 0; match < (multiple ? 2 : 1); match++) {
             int initial = body(b, 42, match == 0 ? (byte)1 : (byte)2, match == 0 ? BodyType.HEADQUARTERS : BodyType.LAUNCHER, 5, 6);
             int name = b.createString("synthetic-" + match);

@@ -1,4 +1,5 @@
 import battlecode.schema.*;
+import battlecode.common.GameConstants;
 import java.io.*;
 import java.nio.*;
 import java.nio.file.*;
@@ -106,7 +107,7 @@ public final class ReplaySummary {
             case Event.GameHeader: {
                 require(i==0 && !header,"unexpected game header");header=true;
                 GameHeader h=(GameHeader)event.e(new GameHeader());require(h!=null,"missing game header payload");
-                spec=string(h.specVersion());require("2.0.3".equals(spec),"unsupported replay spec version");
+                spec=string(h.specVersion());require(GameConstants.SPEC_VERSION.equals(spec),"unsupported replay spec version for pinned engine " + GameConstants.SPEC_VERSION);
                 require(h.teamsLength()==2,"expected two teams");
                 Set<Integer> ids=new HashSet<Integer>();
                 for(int j=0;j<2;j++) { TeamData t=h.teams(j); int id=t.teamID(); require((id==1 || id==2)&&ids.add(id),"invalid team identities"); teams.add(obj("slot",slot(id),"team_id",id,"name",string(t.name()),"package",string(t.packageName()))); }

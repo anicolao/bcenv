@@ -1,4 +1,5 @@
 import battlecode.schema.*;
+import battlecode.common.GameConstants;
 import com.google.flatbuffers.FlatBufferBuilder;
 import java.nio.file.*;
 import java.util.*;
@@ -12,7 +13,7 @@ public final class ReplaySummaryTest {
         int a=TeamData.createTeamData(b,b.createString("quoted \"A\""),b.createString("alpha"),(byte)1);
         int z=TeamData.createTeamData(b,b.createString("B"),b.createString("beta"),(byte)2);
         int teams=GameHeader.createTeamsVector(b,new int[]{z,a}); // order must not determine slot
-        int gh=GameHeader.createGameHeader(b,b.createString("2.0.3"),teams,0,0);
+        int gh=GameHeader.createGameHeader(b,b.createString(GameConstants.SPEC_VERSION),teams,0,0);
         int e0=EventWrapper.createEventWrapper(b,Event.GameHeader,gh);
         int name=b.createString("synthetic");GameMap.startGameMap(b);GameMap.addName(b,name);int map=GameMap.endGameMap(b);
         int mh=MatchHeader.createMatchHeader(b,map,2000);int e1=EventWrapper.createEventWrapper(b,Event.MatchHeader,mh);
@@ -52,7 +53,7 @@ public final class ReplaySummaryTest {
         check("incomplete".equals(ReplaySummary.extract(fixture(false,false,false)).get("status")),"missing footer");
         invalid(fixture(true,true,false),"mismatched arrays");invalid(fixture(true,false,true),"unknown action");invalid(new byte[]{1,2,3},"truncated flatbuffer");
         byte[] wrongVersion=data.clone();
-        byte[] marker="2.0.3".getBytes("UTF-8");boolean replaced=false;
+        byte[] marker=GameConstants.SPEC_VERSION.getBytes("UTF-8");boolean replaced=false;
         for(int i=0;i<=wrongVersion.length-marker.length;i++) {
             boolean matchVersion=true;for(int j=0;j<marker.length;j++) if(wrongVersion[i+j]!=marker[j]) matchVersion=false;
             if(matchVersion) { wrongVersion[i]='9';replaced=true;break; }

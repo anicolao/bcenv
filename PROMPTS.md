@@ -370,3 +370,11 @@ Source: exact user message Sentinel_f7a0d196216c81918381aa77bc0467a0, 2026-10-19
 ````text
 you don't need approval to publish PRs, get back to work
 ````
+
+## Prompt 57: Establish final-rule runtime profile
+
+Source: exact user goal Sentinel_17c073ac43208191b751b3476d180b43, 2026-10-19 23:34:08 UTC, supplied by the coordinator. Previous publication instruction is Prompt56; coordinator confirms this goal is the sole subsequent task-related user message. This independent branch preserves old diagnostic pins while adding the reproducible public final-rule release. No inaccessible history claimed audited, no candidate edits or merges authorized.
+
+````text
+OK. Now set yourself the goal of making the environment able to produce a truly competitive bot. You may have to work on this for days to achieve the goal which is a bcenv environment that enables the embodied LLM to make a bot which is a competent competitor. You will need to come up with a way for the LLM to compete in scrimmages just as it would in teh real competition without giving it access to the competition environment or competitor bots that you set up for it to beat, and it (and you) will need to be able to assess whether it is really able to create a winning bot against 2023 competitors. Work at this until you have a credible system for doing it, creating multiple PRs and summary documents as you go without further intervention from me. You will probably need to schedule a periodic reminder to check on progress and make sure things aren't getting stuck at a minimum, in addition to whatever else you come up with to stick with this goal over the long runnign horizon. Good luck!
+````

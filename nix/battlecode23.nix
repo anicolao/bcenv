@@ -1,19 +1,20 @@
-{ lib, stdenvNoCC, fetchurl, fetchzip, jdk8, unzip, makeWrapper }:
+{ lib, stdenvNoCC, fetchurl, fetchzip, jdk8, unzip, makeWrapper, engineVersion ? "3.0.13" }:
 let
-  version = "2.0.3";
-  revision = "5d142a87579af22c2c04ce046a3cbd448dc1869e";
+  version = engineVersion;
+  pin = (import ./battlecode23-pins.nix).${version};
+  inherit (pin) revision;
   releaseBase = "https://releases.battlecode.org/maven/org/battlecode/battlecode23/${version}";
   engineJar = fetchurl {
     url = "${releaseBase}/battlecode23-${version}.jar";
-    hash = "sha256-XoYqoQ6FyutnrmnhaS90UYk+gB4NgVlwMsFEK7ud604=";
+    hash = pin.jarHash;
   };
   apiDocs = fetchurl {
     url = "${releaseBase}/battlecode23-${version}-javadoc.jar";
-    hash = "sha256-t6WyomjUwpGcsyTGm8PAPgusLsEwaVl5aFaZqWH9dP0=";
+    hash = pin.docsHash;
   };
   upstream = fetchzip {
     url = "https://github.com/battlecode/battlecode23/archive/${revision}.tar.gz";
-    hash = "sha256-nrgQJtR6qZWW0hmiGF0y0PJlRQ19HPgQakVzUh6jeOI=";
+    hash = pin.sourceHash;
   };
 in stdenvNoCC.mkDerivation {
   pname = "battlecode23-engine";
@@ -53,7 +54,7 @@ in stdenvNoCC.mkDerivation {
       --add-flags 'battlecode.server.Main'
     runHook postInstall
   '';
-  passthru = { inherit engineJar apiDocs upstream; };
+  passthru = { inherit engineJar apiDocs upstream revision; };
   meta = {
     description = "Pinned official Battlecode 2023 engine, API documentation, maps and inert upstream test fixtures";
     homepage = "https://github.com/battlecode/battlecode23";

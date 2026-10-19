@@ -4,6 +4,13 @@ let
   jar = "${engine}/share/battlecode23/engine.jar";
 in {
   engine = engine;
+  engine-api = pkgs.runCommand "bcenv-engine-api-${engine.version}" { nativeBuildInputs = [ pkgs.jdk8 ]; } ''
+    mkdir classes
+    cp ${./EngineApiTest.java} EngineApiTest.java
+    javac -source 8 -target 8 -cp ${jar} -d classes EngineApiTest.java
+    java -cp classes:${jar} EngineApiTest '${engine.version}'
+    touch "$out"
+  '';
   prompt-tooling = pkgs.runCommand "bcenv-prompt-tooling" {
     nativeBuildInputs = [ pkgs.nodejs pkgs.git ];
   } ''

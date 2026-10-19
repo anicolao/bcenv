@@ -17,6 +17,11 @@ p.add_argument('--output', required=True)
 a = p.parse_args()
 source = Path(__file__).resolve().parents[1]
 store_root = Path(a.store_root).resolve()
+year = json.loads((source / 'seasons/2023/manifest.json').read_text())
+diagnostic_engine = year.get('diagnostic_engine', year['engine'])
+engine_metadata = store_root / a.engine.lstrip('/') / 'share/battlecode23'
+if (engine_metadata / 'version').read_text().strip() != diagnostic_engine['version']:
+    raise ValueError('Historical pilot/lecture export requires the explicit 2.0.3 diagnostic engine')
 out = Path(a.output).resolve()
 out.mkdir(parents=True, exist_ok=False)
 root = out / 'root'
@@ -42,10 +47,9 @@ shutil.copytree(engine / 'battlecode23', root / 'opt/battlecode23')
 shutil.copytree(engine / 'doc/battlecode23', workspace / 'reference')
 shutil.copytree(source / 'runbooks/local-pilot/skills', workspace / 'skills')
 shutil.copytree(source / 'runbooks/local-pilot/docs', workspace / 'docs')
-year = json.loads((source / 'seasons/2023/manifest.json').read_text())
 (workspace / 'manifest.json').write_text(json.dumps({
     'schema': 'bcenv.local-pilot-manifest.v1', 'season': '2023',
-    'engine': year['engine'], 'interface': year['interface'],
+    'engine': diagnostic_engine, 'interface': year['interface'],
     'runtime_package': a.bcenv, 'rules': 'reference/specs/',
     'api': ['reference/api/', 'reference/api-source/'],
     'skills': ['skills/common/SKILL.md', 'skills/2023/SKILL.md'],

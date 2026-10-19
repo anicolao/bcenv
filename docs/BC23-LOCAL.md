@@ -38,7 +38,7 @@ retention and clean-agent isolation remain separate release gates.
 ## Dependency provenance
 
 The official release fat JAR and Javadoc JAR are fixed-hash Nix inputs; the
-source archive is pinned independently to official tag 2.0.3's commit. The build
+source archive is pinned independently to official tag 3.0.13's commit. The build
 checks the released JAR's embedded version. This is reproducible artifact
 acquisition, not a demonstrated bit-for-bit rebuild of the official JAR from
 source. The upstream source does not declare one repository-wide engine license;
@@ -87,3 +87,26 @@ covers at most 100000 events, 100 matches and 5000000 core records. The Java
 query process uses a 512 MiB heap and the usual `--timeout` bound. As with the
 summary, this is not a full FlatBuffers verifier; unextracted schema fields are
 not validated. See [replay semantics](../seasons/2023/replay/README.md).
+
+## Engine migration and historical evidence
+
+The active runtime is the official public 3.0.13 release at source commit
+`9b890f83672c98b81cc153f618bd56e1ab6134b5`. This includes final-season gameplay
+rules and the last public cloud-sensing fix. The final-tournament-labeled 3.0.14
+public engine source changes only the spec-version string; its release workflow
+injects private maps and publishes artifacts privately. Its engine and Javadoc
+URLs returned HTTP 403 in this audit. We therefore do not claim the public
+3.0.13 distribution is the exact private tournament distribution.
+
+The old package remains available as `battlecode23-diagnostic-2_0_3`, and its
+matching adapter/parser as `bcenv-diagnostic-2_0_3`. The original pilot and lecture
+trial records and runbooks continue to describe their actual 2.0.3 execution.
+Those exporters require the diagnostic engine. Rebuild every competitor from
+source under 3.0.13 for new comparisons. Old verified binaries are rejected by
+engine SHA-256 checks; do not edit their metadata to reuse them. Give new
+measurements new output paths and retain old outputs unchanged.
+
+Replay parsing is exact-version-bound to the JAR used to compile the parser.
+Use the matching diagnostic parser for an old 2.0.3 replay. A schema-compatible
+version is not automatically accepted, and a successful parse does not make
+results under different rules comparable. See [migration evidence](ENGINE-MIGRATION-2023.md).

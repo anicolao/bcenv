@@ -6,9 +6,11 @@ description: Build, verify, package and run own BC23 sources using the pinned en
 # BC23 tooling
 
 Use `nix develop` or `nix run .#bcenv -- ...` from the pinned release. Java 8,
-engine 2.0.3, rules, Java API, maps and inert builder fixtures are packaged by the
+engine 3.0.13 (public final-rules baseline), rules, Java API, maps and inert builder fixtures are packaged by the
 flake. No Gradle `update`, live release lookup or direct installers are needed.
 Inspect the manifest and `docs/BC23-LOCAL.md` for paths and limitations.
+Historical 2.0.3 diagnostics use explicitly named diagnostic packages and cannot
+be pooled with final-rules results.
 
 Put your own Java source only under competitor/src/, with a package directory
 containing RobotPlayer.java. Build with an explicit package and a new output:
