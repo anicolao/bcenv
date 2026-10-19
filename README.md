@@ -69,3 +69,10 @@ and [replica gates](docs/REPLICA-2023.md). This is separate from the proposed
 [bc-planner experiment plan](https://github.com/anicolao/bc-planner/pull/8).
 
 - [Authentic lecture-opponent diagnostic and export](docs/LECTURE-TRIAL-001.md)
+
+## Final-rule and historical engine profiles
+
+New runtime outputs use the official public 3.0.13 engine. Explicit 2.0.3
+diagnostic outputs preserve earlier experiments. See the [migration and evidence
+limits](docs/ENGINE-MIGRATION-2023.md); public final-rule comparisons do not
+reproduce the inaccessible private finals map distribution.

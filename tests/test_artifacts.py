@@ -58,13 +58,32 @@ class ArtifactTests(unittest.TestCase):
         summary = {'status': 'complete', 'spec_version': '2.0.3', 'winner_slot': 'B',
                    'teams': [{'slot': 'B', 'package': 'beta'}, {'slot': 'A', 'package': 'alpha'}],
                    'matches': [{'map': 'Map', 'winner_slot': 'B'}]}
-        self.assertTrue(bc23.replay_matches(summary, 'Map', 'alpha', 'beta'))
-        self.assertFalse(bc23.replay_matches(summary, 'OtherMap', 'alpha', 'beta'))
-        self.assertFalse(bc23.replay_matches(summary, 'Map', 'beta', 'alpha'))
+        self.assertTrue(bc23.replay_matches(summary, 'Map', 'alpha', 'beta', '2.0.3'))
+        self.assertFalse(bc23.replay_matches(summary, 'OtherMap', 'alpha', 'beta', '2.0.3'))
+        self.assertFalse(bc23.replay_matches(summary, 'Map', 'beta', 'alpha', '2.0.3'))
         for invalid in [None, [], {}, {'matches': None}]:
-            self.assertFalse(bc23.replay_matches(invalid, 'Map', 'alpha', 'beta'))
+            self.assertFalse(bc23.replay_matches(invalid, 'Map', 'alpha', 'beta', '2.0.3'))
+        self.assertFalse(bc23.replay_matches(summary, 'Map', 'alpha', 'beta', '3.0.13'))
+        summary['spec_version'] = '3.0.13'
+        self.assertTrue(bc23.replay_matches(summary, 'Map', 'alpha', 'beta', '3.0.13'))
+        self.assertFalse(bc23.replay_matches(summary, 'Map', 'alpha', 'beta', '2.0.3'))
+        summary['spec_version'] = '2.0.3'
         summary['matches'][0]['winner_slot'] = 'A'
-        self.assertFalse(bc23.replay_matches(summary, 'Map', 'alpha', 'beta'))
+        self.assertFalse(bc23.replay_matches(summary, 'Map', 'alpha', 'beta', '2.0.3'))
+
+    def test_embedded_engine_version(self):
+        import zipfile
+        for version in ('2.0.3', '3.0.13', '3.0.14'):
+            jar = self.root / (version + '.jar')
+            with zipfile.ZipFile(jar, 'w') as z:
+                z.writestr('battlecode_version', version + '\n')
+            self.assertEqual(bc23.engine_version(jar), version)
+        for i, version in enumerate(('untrusted', '3.0.13\n3.0.14', '0' * 65)):
+            jar = self.root / ('invalid-' + str(i) + '.jar')
+            with zipfile.ZipFile(jar, 'w') as z:
+                z.writestr('battlecode_version', version)
+            with self.assertRaises(ValueError):
+                bc23.engine_version(jar)
 
     def test_package_validation(self):
         for name in ['-Jfoo', '../escape', '', 'a/b', 'x;echo hacked']:

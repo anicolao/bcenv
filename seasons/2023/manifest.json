@@ -12,10 +12,14 @@
     "merged_commit": "7bf66b0122e06432ca53f43443f5bfe071335720"
   },
   "engine": {
-    "version": "2.0.3",
+    "version": "3.0.13",
     "repository": "https://github.com/battlecode/battlecode23",
-    "commit": "5d142a87579af22c2c04ce046a3cbd448dc1869e",
-    "jar_sha256_sri": "sha256-XoYqoQ6FyutnrmnhaS90UYk+gB4NgVlwMsFEK7ud604="
+    "commit": "9b890f83672c98b81cc153f618bd56e1ab6134b5",
+    "jar_sha256_sri": "sha256-K225jjEuDlCdWZrMRr/7tVwlad4PEsghSoXuV2JfFfI=",
+    "javadoc_sha256_sri": "sha256-CoIcGKTEO9ozEllUmJg67pAzNnYAXfiCJuCPesCLMNg=",
+    "source_nar_sha256_sri": "sha256-udrS36C7cREUM3b1+MrWMTqIpnAy3iitomWPMCdfevM=",
+    "use": "public-final-rules-baseline",
+    "tournament_release_caveat": "3.0.14 public engine logic differs only in SPEC_VERSION; its release workflow injects private maps and the official engine/Javadoc artifacts return HTTP 403. This is not the exact private final-tournament distribution."
   },
   "galaxy": {
     "repository": "https://github.com/battlecode/galaxy",
@@ -59,5 +63,12 @@
       "matches": 12
     },
     "full_acceptance_claim": false
+  },
+  "diagnostic_engine": {
+    "version": "2.0.3",
+    "repository": "https://github.com/battlecode/battlecode23",
+    "commit": "5d142a87579af22c2c04ce046a3cbd448dc1869e",
+    "jar_sha256_sri": "sha256-XoYqoQ6FyutnrmnhaS90UYk+gB4NgVlwMsFEK7ud604=",
+    "use": "historical-diagnostics-only"
   }
 }

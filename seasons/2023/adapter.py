@@ -83,13 +83,25 @@ def load_build(path, engine):
     return path, data
 
 
-def replay_matches(summary, map_name, team_a, team_b):
+def engine_version(path):
+    """Read the exact released runtime's version, never infer it from a replay."""
+    with zipfile.ZipFile(path) as engine:
+        entry = engine.getinfo('battlecode_version')
+        if entry.file_size > 64:
+            raise ValueError('Invalid engine version metadata')
+        version = engine.read(entry).decode('ascii').strip()
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+        raise ValueError('Invalid engine version metadata')
+    return version
+
+
+def replay_matches(summary, map_name, team_a, team_b, spec_version):
     if not isinstance(summary, dict):
         return False
     try:
         matches = summary['matches']
         teams = {t['slot']: t['package'] for t in summary['teams']}
-        return (summary['status'] == 'complete' and summary['spec_version'] == '2.0.3'
+        return (summary['status'] == 'complete' and summary['spec_version'] == spec_version
                 and len(matches) == 1 and matches[0]['map'] == map_name
                 and len(summary['teams']) == 2 and teams == {'A': team_a, 'B': team_b}
                 and summary['winner_slot'] in ('A', 'B')
@@ -100,6 +112,7 @@ def replay_matches(summary, map_name, team_a, team_b):
 
 def run(args):
     rt = runtime()
+    version = engine_version(rt['BCENV_ENGINE_JAR'])
     a, ad = load_build(args.team_a, rt['BCENV_ENGINE_JAR'])
     b, bd = load_build(args.team_b, rt['BCENV_ENGINE_JAR'])
     if any(Path(args.output).resolve().is_relative_to(path) for path in (a, b)):
@@ -127,6 +140,7 @@ def run(args):
     cmd = [rt['BCENV_JAVA'], '-Xmx512m'] + ['-D' + k + '=' + v for k, v in props.items()]
     cmd += ['-cp', rt['BCENV_ENGINE_JAR'], 'battlecode.server.Main', '-c=-']
     result = {'schema': VERSION, 'kind': 'match', 'season': '2023',
+        'engine_version': version,
         'engine_sha256': digest(rt['BCENV_ENGINE_JAR']), 'map_sha256': digest(out / 'maps' / map_path.name),
         'teams': {'A': {'source_sha256': ad['source_sha256'], 'binary_sha256': ad['binary_sha256'], 'package': ad['package']},
                   'B': {'source_sha256': bd['source_sha256'], 'binary_sha256': bd['binary_sha256'], 'package': bd['package']}},
@@ -150,7 +164,7 @@ def run(args):
                 except (ValueError, UnicodeError) as error:
                     summary = {}
                     result['extraction']['parse_error'] = str(error)
-                if replay_matches(summary, map_path.stem, ad['package'], bd['package']):
+                if replay_matches(summary, map_path.stem, ad['package'], bd['package'], version):
                     result['status'] = 'completed'
                     result['winner'] = summary['winner_slot']
                     result['replay']['summary'] = 'replay-summary.json'
