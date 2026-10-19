@@ -92,8 +92,8 @@ state/progress and movement-scoring defects despite successful games.
 
 Full results, source snapshots, exact kickoff/lineage and all twelve replays are
 prepared in bc-planner's2023-lecture-opponent-results.md and
-experiments/bcenv/runs/BCENV-002/. Publication is separately pending approval;
-local results must not be described as already publicly linked. No candidate code
+experiments/bcenv/runs/BCENV-002/. Publication was authorized on2026-10-19T22:46:47Z; this update is being
+published for review as draft PRs, without merging. No candidate code
 was supplied, edited or coached by the environment builder during execution.
 
 The pinned query runtime and copied new runbooks/catalog/kickoff have distinct
