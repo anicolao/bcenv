@@ -1,0 +1,73 @@
+{
+  "schema": "bcenv.replay-route-integration-checks.v1",
+  "platform": "x86_64-linux",
+  "flake_checks_passed": [
+    "engine",
+    "diagnostic-engine-api",
+    "engine-api",
+    "diagnostic-replay-parser",
+    "replay-parser",
+    "diagnostic-replay-query",
+    "replay-query",
+    "diagnostic-fixture-game",
+    "fixture-game",
+    "replay-version-isolation",
+    "prompt-tooling",
+    "python-unit",
+    "galaxy-contract"
+  ],
+  "python_tests_passed": 286,
+  "independent_probes_passed": 27,
+  "runtime_store_path": "/nix/store/lxma744svicl1mmr51j31aqi5g1z9c9q-bcenv-2023-0.1.0",
+  "trusted_module_sources": [
+    {
+      "path": "services/controller.py",
+      "sha256": "cddf84fca4ae18bc25296f64cdec0fe0bd18c1242fbbdfafe925c0641feac2bf"
+    },
+    {
+      "path": "services/controller_ledger.py",
+      "sha256": "738c263437acb3427b8543f4481622c9966a7ce1ee42897fbc899c7a2badc2ff"
+    },
+    {
+      "path": "services/ledger.py",
+      "sha256": "a42d57e2e7dcad7ad40bbe76295d58a9830ec7eb283998490545b2491ee9bd3e"
+    },
+    {
+      "path": "services/replay_feedback.py",
+      "sha256": "bd68a1c4a768a07cc90f7d0cd65017053d2d542fb9fc48f9fcc9b59d235be865"
+    },
+    {
+      "path": "services/replay_feedback_v2.py",
+      "sha256": "d1864505c392a520f69f38aa9f865be940c300bc884fce5c506045d92695f927"
+    },
+    {
+      "path": "services/replay_protocol.py",
+      "sha256": "09eeab010910c7b41a0b473e37c05c189db734f755079f28fe9b923b15387486"
+    },
+    {
+      "path": "services/replay_route.py",
+      "sha256": "2763d59771e5b8a71a566687a2031e998fb28b99e32c4206a92e8ddb7f708f81"
+    },
+    {
+      "path": "services/replay_store.py",
+      "sha256": "c143d79f54253b8ef36402b5f1e911b91e6b8876d445eb67c0d0c6f27fea1129"
+    },
+    {
+      "path": "services/responses_transport.py",
+      "sha256": "75552cad3465bf7a4cc5cb700989d1824e9c05f28a72a876c4dde3e91ac185bd"
+    },
+    {
+      "path": "services/scrimmage.py",
+      "sha256": "6128436a9d2a43fca1a7359d9add89a64ce4598ed1d2b6b1f914ee56d674746a"
+    },
+    {
+      "path": "services/worker_lifecycle.py",
+      "sha256": "a1521bd8f915a96fed423391d3d70659ef49a7a390bda95c560bf1446d3b8ead"
+    }
+  ],
+  "trusted_modules_found_in_package": [],
+  "package_file_count": 36,
+  "flake_log_sha256": "5793c8a25f553be3ebdfdb1ef96f2c9325d97229769d6ccbd2702b0f104542bc",
+  "aarch64_tested": false,
+  "scope": "Offline preflight only; no accepted deployment, fresh model trial or new public-opponent game. Full flake includes existing deterministic engine fixture checks. Build predates addition of this result document; executable code and contracts unchanged."
+}

@@ -190,7 +190,7 @@ class OfflineResponsesTransport:
     errors, hidden SDK retries, polling, fallbacks, or context truncation.
     """
     def __init__(self, exchange: OfflineExchange, counter: OfflineTokenCounter, *,
-                 limits=None, controller_limits=None, clock=time.monotonic):
+                 limits=None, controller_limits=None, clock=time.monotonic, controller_protocol="v1"):
         self._limits = limits or ResponsesLimits()
         self._controller_limits = controller_limits or ControllerLimits()
         if type(self._limits) is not ResponsesLimits or type(self._controller_limits) is not ControllerLimits:
@@ -199,7 +199,7 @@ class OfflineResponsesTransport:
         self._last_clock = None
         self._exchange = exchange
         self._counter = counter
-        self._schemas = tool_schemas(self._controller_limits)
+        self._schemas = tool_schemas(self._controller_limits, protocol=controller_protocol)
         self._tools = tuple(_encode({'type': 'function', 'strict': True,
                                      **json.loads(schema)}) for schema in self._schemas)
         self._context = None

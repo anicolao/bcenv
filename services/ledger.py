@@ -27,7 +27,8 @@ _CODES = frozenset(('invalid_context', 'invalid_request', 'request_limit', 'not_
     'idempotency_conflict', 'rate_limit', 'record_limit', 'source_limit', 'pending_limit',
     'active_limit', 'job_not_queued', 'stale_reservation', 'terminal_conflict',
     'invalid_terminal_result', 'storage_unavailable', 'storage_integrity',
-    'incompatible_database', 'configuration_mismatch', 'invalid_clock', 'clock_regression'))
+    'incompatible_database', 'configuration_mismatch', 'invalid_clock', 'clock_regression',
+    'not_ready', 'replay_not_available', 'invalid_evidence', 'resource_limit', 'replay_conflict'))
 
 
 class LedgerError(RuntimeError):
@@ -216,6 +217,11 @@ class DurableLedger:
                              max_bytes=self.limits.max_public_bytes)
 
     def _expire(self, connection, now, *, all_running=False):
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='replay_attempts'").fetchone():
+            if all_running:
+                connection.execute("UPDATE replay_attempts SET state='expired',lease_until=NULL WHERE state='running'")
+            else:
+                connection.execute("UPDATE replay_attempts SET state='expired',lease_until=NULL WHERE state='running' AND lease_until<=?", (now,))
         if all_running:
             rows = connection.execute("SELECT id FROM jobs WHERE state='running'").fetchall()
         else:
@@ -317,6 +323,16 @@ class DurableLedger:
         return accepted
 
     def submit(self, principal, idempotency_key, archive, package):
+        return self._submit(principal, idempotency_key, archive, package)
+
+    def _submit(self, principal, idempotency_key, archive, package, *, run_binding=None, replay_configuration=None):
+        # Private same-package extension seam. Public v1 submit has no binding
+        # option. The replay store initializes and owns the additive tables.
+        if run_binding is not None:
+            if (type(run_binding) is not tuple or len(run_binding) != 2 or
+                    type(run_binding[1]) is not str or len(run_binding[1]) > 2048):
+                raise LedgerError('invalid_request')
+            _context(run_binding[0])
         owner = _context(principal)
         if (type(idempotency_key) is not str or not _KEY.fullmatch(idempotency_key) or
                 type(archive) is not bytes or type(package) is not str):
@@ -325,6 +341,10 @@ class DurableLedger:
             raise LedgerError('request_limit')
 
         def operation(connection, now, expired):
+            if run_binding is not None:
+                config = connection.execute("SELECT value FROM metadata WHERE key='replay_configuration'").fetchone()
+                if config is None or config[0] != replay_configuration:
+                    raise LedgerError('configuration_mismatch')
             self._charge(connection, owner, 'submit', now)
             try:
                 accepted = accept_source_zip(archive, package, self.intake)
@@ -334,12 +354,23 @@ class DurableLedger:
                 accepted, rejection = None, error.code
                 request = {'schema': 'bcenv.ledger-request.v1', 'package': package,
                            'archive_sha256': hashlib.sha256(archive).hexdigest(), 'rejection': rejection}
+            if run_binding is not None:
+                request['run_binding'] = {'run_id': run_binding[0], 'policy': run_binding[1]}
+                prior_policy = connection.execute('SELECT policy_json FROM replay_job_runs WHERE owner=? AND run_id=? LIMIT 1',
+                                                   (owner, run_binding[0])).fetchone()
+                if prior_policy is not None and prior_policy[0] != run_binding[1]:
+                    raise LedgerError('configuration_mismatch')
             request_digest = _identity(request)
             existing = connection.execute('SELECT * FROM jobs WHERE owner=? AND idempotency_key=?',
                                           (owner, idempotency_key)).fetchone()
             if existing is not None:
                 if existing['request_digest'] != request_digest:
                     raise LedgerError('idempotency_conflict')
+                if run_binding is not None:
+                    bound = connection.execute('SELECT owner,run_id,policy_json FROM replay_job_runs WHERE submission_id=?',
+                                               (existing['id'],)).fetchone()
+                    if bound is None or tuple(bound) != (owner, *run_binding):
+                        raise LedgerError('storage_integrity')
                 return self._public(existing)
             total = connection.execute('SELECT count(*) FROM jobs').fetchone()[0]
             own = connection.execute('SELECT count(*) FROM jobs WHERE owner=?', (owner,)).fetchone()[0]
@@ -375,6 +406,9 @@ class DurableLedger:
                 VALUES (?,?,?,?,?,?,?,?)''',
                 (identifier, owner, idempotency_key, request_digest, accepted.content_sha256 if accepted else None,
                  size, 'queued' if accepted else 'rejected', None if accepted else _json(response)))
+            if run_binding is not None:
+                connection.execute('INSERT INTO replay_job_runs VALUES (?,?,?,?,?)',
+                                   (identifier, owner, run_binding[0], 'j_' + uuid.uuid4().hex, run_binding[1]))
             return response
         return self._run(operation)
 

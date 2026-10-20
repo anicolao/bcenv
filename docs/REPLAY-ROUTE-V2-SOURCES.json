@@ -1,0 +1,62 @@
+{
+  "integration_baseline_note": "COMPETITIVE-INTEGRATION-SOURCES.json belongs to historical d769760; route changes ledger/controller/responses_transport and adds three trusted modules. It is not an updated final-tree hash manifest.",
+  "producer_base_commit": "f3963b7f16857bf6aad837196b8262441ff7c1e3",
+  "review_artifacts": [
+    {
+      "path": "review_durable_replay.py",
+      "sha256": "23e1a27a5bb2d9d21fbde9bbbbd626344d72e4e79d1b87aa9595976a02b0b517"
+    },
+    {
+      "path": "review_durable_replay.nix",
+      "sha256": "4c899ed18b3bac40e2eede2507a51fc0545feca8aa99e06317d9e67e64fe5a45"
+    },
+    {
+      "path": "review_replay_v1_registry_baseline.json",
+      "sha256": "82d03cc99f2c0d98c5ca1a00b96bace933143e52e04fcaed4cdbca1f925b6d9e"
+    }
+  ],
+  "reviewed_files": [
+    {
+      "git_blob": "10476509f46cec644fe0897089924375945186a8",
+      "path": "services/ledger.py",
+      "sha256": "a42d57e2e7dcad7ad40bbe76295d58a9830ec7eb283998490545b2491ee9bd3e"
+    },
+    {
+      "git_blob": "05a3f4f94c096a92f6773dcb3e3ff829bd60c6cf",
+      "path": "services/controller.py",
+      "sha256": "cddf84fca4ae18bc25296f64cdec0fe0bd18c1242fbbdfafe925c0641feac2bf"
+    },
+    {
+      "git_blob": "207486a05c9e69e91b77942a0a44202ae428f849",
+      "path": "services/responses_transport.py",
+      "sha256": "75552cad3465bf7a4cc5cb700989d1824e9c05f28a72a876c4dde3e91ac185bd"
+    },
+    {
+      "git_blob": "4df2f48ef5693fd9fd8ee1afad99ab9a2f6ac2ec",
+      "path": "services/replay_store.py",
+      "sha256": "c143d79f54253b8ef36402b5f1e911b91e6b8876d445eb67c0d0c6f27fea1129"
+    },
+    {
+      "git_blob": "713a96ae3a5d8cc5be079d449dcacbda74b96382",
+      "path": "services/replay_route.py",
+      "sha256": "2763d59771e5b8a71a566687a2031e998fb28b99e32c4206a92e8ddb7f708f81"
+    },
+    {
+      "git_blob": "a2b8bf21acb8acafb8b0adacc99d47ba0805914e",
+      "path": "services/replay_protocol.py",
+      "sha256": "09eeab010910c7b41a0b473e37c05c189db734f755079f28fe9b923b15387486"
+    },
+    {
+      "git_blob": "2ae535e7aade29594f545625b29689622b4db4d8",
+      "path": "tests/test_replay_route.py",
+      "sha256": "32e4534bd3ae6b824b8fe2cac9f2d1afb134dfa7d00453933a5b5f7c9f81b904"
+    },
+    {
+      "git_blob": "24425add669aae13abacbcf1e766dd13499daedf",
+      "path": "contracts/replay-route-v2.md",
+      "sha256": "34566568f8f8ba153dfecc3c253cbc54c90fe7d68ba18363609a3914ad04e36e"
+    }
+  ],
+  "route_base_commit": "d769760da47cedb4acf6c44b24497a7f29ef1fc5",
+  "scope": "offline synthetic replay route independent review"
+}

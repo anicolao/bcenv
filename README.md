@@ -88,3 +88,13 @@ worker are testable foundations. Real launch and heldouts remain closed.
 real post-filter record offsets and explicit coverage/progress markers, preserving
 v1 behavior. Read-only replay pages can reach later events; service ownership and
 routing are a separate integration and real launch remains closed.
+
+### Offline durable replay delivery
+
+Explicit controller protocol v2 adds scoped manifest/window/page retrieval while
+v1 remains the default and withholds replays. See [the contract](contracts/replay-route-v2.md)
+and [independent review](docs/REPLAY-ROUTE-V2-REVIEW.md). The route uses trusted
+synthetic callbacks; it is not an authenticated deployment or real match validator.
+The older integration source manifest records its historical baseline, not the
+changed final controller/ledger/transport; [route hashes](docs/REPLAY-ROUTE-V2-SOURCES.json)
+identify the reviewed additions. Real launch remains closed.

@@ -264,7 +264,7 @@ def _text(data, cap):
     return clipped.decode('utf-8', errors='replace'), len(data) > cap
 
 
-def _dispatch(call, workspace, scrimmage, limits, artifacts, submissions):
+def _dispatch(call, workspace, scrimmage, limits, artifacts, submissions, protocol="v1"):
     if type(call.name) is not str or call.name not in TOOL_NAMES:
         raise InvalidCall('unknown_tool')
     arguments = _arguments(call, limits)
@@ -321,6 +321,19 @@ def _dispatch(call, workspace, scrimmage, limits, artifacts, submissions):
         if type(package) is not str or len(package) > 240 or not _PACKAGE.fullmatch(package):
             raise InvalidCall('invalid_arguments')
         reply = scrimmage.submit(SubmitRequest(artifact_id, package))
+    elif call.name == 'scrimmage_replay' and protocol == 'v2':
+        from services.replay_protocol import parse_request, project_reply
+        try:
+            request = parse_request(arguments)
+        except Exception:
+            raise InvalidCall('invalid_arguments') from None
+        if request.submission_id not in submissions:
+            raise InvalidCall('unknown_handle')
+        reply = scrimmage.replay(request)
+        try:
+            return project_reply(reply, request)
+        except Exception:
+            raise InvalidCall('invalid_adapter_response') from None
     else:
         _keys(arguments, ('submission_id',))
         submission_id = _handle(arguments['submission_id'], _SUBMISSION)
@@ -349,9 +362,11 @@ def _encoded(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('utf-8')
 
 
-def tool_schemas(limits=None):
+def tool_schemas(limits=None, *, protocol="v1"):
     """Immutable provider-neutral JSON-schema registry for a future API adapter."""
     limits = limits or ControllerLimits()
+    if type(protocol) is not str or protocol not in ("v1", "v2"):
+        raise ValueError("unsupported_controller_protocol")
     text = {'type': 'string'}
     path = {'type': 'string', 'maxLength': 240}
     definitions = (
@@ -365,12 +380,15 @@ def tool_schemas(limits=None):
         ('scrimmage_result', {'submission_id': {'type': 'string', 'pattern': '^s_[0-9a-f]{32}$'}}),
         ('scrimmage_replay', {'submission_id': {'type': 'string', 'pattern': '^s_[0-9a-f]{32}$'}}),
     )
+    if protocol == "v2":
+        from services.replay_protocol import replay_fields
+        definitions = definitions[:-1] + (("scrimmage_replay", replay_fields()),)
     return tuple(_encoded({'name': name, 'parameters': {'type': 'object',
         'properties': fields, 'required': list(fields), 'additionalProperties': False}})
         for name, fields in definitions)
 
 
-def run_synthetic(context, transport, workspace, scrimmage, *, limits=None, clock=time.monotonic):
+def run_synthetic(context, transport, workspace, scrimmage, *, limits=None, clock=time.monotonic, protocol="v1"):
     """Run bounded protocol probes using trusted synthetic adapters only.
 
     The transport sees fixed tool names and typed messages, not controller,
@@ -382,7 +400,7 @@ def run_synthetic(context, transport, workspace, scrimmage, *, limits=None, cloc
         raise ValueError('initial_context_limit')
     transcript, calls_seen, used_calls, used_output = [], set(), 0, 0
     artifacts, submissions = set(), set()
-    schemas = tool_schemas(limits)
+    schemas = tool_schemas(limits, protocol=protocol)
     start = clock()
     turns = 0
 
@@ -443,7 +461,7 @@ def run_synthetic(context, transport, workspace, scrimmage, *, limits=None, cloc
             calls_seen.add(call.call_id)
             used_calls += 1
             try:
-                output = _dispatch(call, workspace, scrimmage, limits, artifacts, submissions)
+                output = _dispatch(call, workspace, scrimmage, limits, artifacts, submissions, protocol)
             except InvalidCall as error:
                 output = {'status': 'rejected', 'reason': str(error) if str(error) in _ERRORS else 'invalid_adapter_response'}
             except Exception:
@@ -451,10 +469,11 @@ def run_synthetic(context, transport, workspace, scrimmage, *, limits=None, cloc
             if expired():
                 return report('time_limit')
             encoded = _encoded({'call_id': call.call_id, 'result': output})
-            if len(encoded) > limits.max_tool_output_bytes:
+            envelope_cap = min(limits.max_tool_output_bytes, 16384) if protocol == 'v2' else limits.max_tool_output_bytes
+            if len(encoded) > envelope_cap:
                 encoded = _encoded({'call_id': call.call_id,
                                     'result': {'status': 'rejected', 'reason': 'tool_output_limit'}})
-            if (len(encoded) > limits.max_tool_output_bytes or
+            if (len(encoded) > envelope_cap or
                     used_output + len(encoded) > limits.max_total_output_bytes):
                 return report('output_limit')
             used_output += len(encoded)
