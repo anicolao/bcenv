@@ -98,3 +98,8 @@ connects trusted immutable source-export receipts to run-owned artifacts and
 durable jobs. It preserves the six tools and refuses stdout/path claims as
 export authority. Actual sandbox capture, authentication and replay delivery
 remain separate gates.
+
+[Synthetic worker lifecycle](contracts/worker-lifecycle-v1.md) connects reservation
+fencing to an inert callback and bounded closed receipts. It tests expiry and
+uncertain-commit behavior without starting a worker process or game; identity
+echoes are consistency assertions, not authentic game evidence.

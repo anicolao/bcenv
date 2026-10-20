@@ -404,6 +404,24 @@ class DurableLedger:
             return JobReservation(submission_id, generation, worker, until, source)
         return self._run(operation)
 
+    def check_reservation(self, principal, submission_id, worker, generation):
+        """Trusted point-in-time fence check, not a lock or process admission.
+
+        No public read quota is charged. Time/recovery and source integrity are
+        checked transactionally; validity may change immediately after return.
+        """
+        owner, worker = _context(principal), _context(worker)
+        if type(generation) is not int or generation < 1:
+            raise LedgerError('invalid_request')
+        def operation(connection, now, expired):
+            row = self._owned(connection, owner, submission_id)
+            if (row['state'] != 'running' or row['worker'] != worker or
+                    row['generation'] != generation or row['lease_until'] <= now):
+                raise LedgerError('stale_reservation')
+            source = self._source(connection, row['source_digest'])
+            return JobReservation(submission_id, generation, worker, row['lease_until'], source)
+        return self._run(operation)
+
     def finish(self, principal, submission_id, worker, generation, evidence):
         owner, worker = _context(principal), _context(worker)
         if type(generation) is not int or generation < 1:
