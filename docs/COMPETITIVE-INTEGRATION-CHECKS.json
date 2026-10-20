@@ -1,0 +1,19 @@
+{
+  "schema": "bcenv.integration-checks.v1",
+  "platform": "x86_64-linux",
+  "flake_checks_passed": 13,
+  "python_tests_passed": 230,
+  "runtime_store_path": "/nix/store/db83y5kks77pyc5rvb3h78k23m59myp7-bcenv-2023-0.1.0",
+  "trusted_module_names_checked": [
+    "controller.py",
+    "controller_ledger.py",
+    "ledger.py",
+    "replay_feedback.py",
+    "responses_transport.py",
+    "scrimmage.py",
+    "worker_lifecycle.py"
+  ],
+  "trusted_modules_found_in_package": [],
+  "scope": "reviewed component integration only; no new public-opponent trial or model call",
+  "aarch64_tested": false
+}
