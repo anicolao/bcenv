@@ -86,3 +86,9 @@ synthetic adapters. No real inference or enforced sandbox is implemented.
 operational metadata and preserves capped gameplay evidence with explicit version
 and completeness markers. Synthetic tests cover malformed inputs and honest
 truncation; this is not yet a service replay route or an authenticity check.
+
+[Durable synthetic job ledger](contracts/ledger-v1.md) adds transactional source
+retention, owner-scoped idempotency/quotas and fenced crash recovery. Principal
+strings are trusted test context, not authentication; database fencing does not
+terminate workers. [Independent review](docs/DURABLE-LEDGER-REVIEW.md) records
+the passing tests, corrected defects and unpassed deployment gates.
