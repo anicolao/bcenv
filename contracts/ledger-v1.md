@@ -53,6 +53,11 @@ Trusted-only methods:
   queued job. It returns a frozen `JobReservation` containing the opaque ID,
   non-secret integer generation, worker name, deadline and immutable source.
   There is no queue selection/scheduling loop or worker registration.
+- `check_reservation(principal, submission_id, worker, generation)` rechecks a
+  live running claim and its immutable source in one transaction, without public
+  read-rate charges. It returns the matching frozen reservation or a closed
+  error. This is a trusted-only point-in-time check, not a held lock or physical
+  resource admission guarantee; expiry/terminal state may change after return.
 - `finish(principal, submission_id, worker, generation, evidence)` records a
   terminal result only for the matching live reservation. Evidence is normalized
   through the existing result allowlist; the adapter's `validated_complete`
