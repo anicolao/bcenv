@@ -86,3 +86,8 @@ synthetic adapters. No real inference or enforced sandbox is implemented.
 operational metadata and preserves capped gameplay evidence with explicit version
 and completeness markers. Synthetic tests cover malformed inputs and honest
 truncation; this is not yet a service replay route or an authenticity check.
+
+[Offline Responses transport](contracts/responses-transport-v1.md) supplies the
+fixed-model request codec, bounded continuation and pessimistic admission tests.
+[Independent review](docs/RESPONSES-TRANSPORT-REVIEW.md) records verified scope.
+It has no network sender, credentials, live token accounting or launch capability.

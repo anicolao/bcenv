@@ -9,7 +9,7 @@ secure sandbox, historical Galaxy replica or source of bot-strength evidence.
 
 ## Transport and frozen initial context
 
-A trusted future provider adapter implements `ModelTransport.next_turn` over
+The offline Responses adapter implements the `ModelTransport.next_turn` seam over
 `TurnRequest` and `TurnReply`. The request carries exact frozen initial system
 and task UTF-8 bytes, immutable fixed tool specifications, bounded prior messages
 and a turn number. No additional prompt/context is silently inserted. The context
@@ -18,8 +18,10 @@ or newline changes change identity. The transport must preserve those bytes when
 mapping to the selected provider's supported structured-tool API.
 
 `tool_schemas()` returns immutable, provider-neutral JSON-schema descriptions.
-They are not an implemented provider integration or an assurance that a particular
-SDK/request shape is supported. The six fixed function names are:
+The offline-tested Responses mapping is documented in
+[`responses-transport-v1.md`](responses-transport-v1.md). Neither those schema bytes
+nor its fixture tests establish an authenticated provider integration or real-launch
+capability. The six fixed function names are:
 
 - `workspace_read`: safe relative file path, integer byte offset and capped limit
 - `workspace_write`: safe relative file path and capped UTF-8 content
