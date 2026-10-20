@@ -1,0 +1,68 @@
+{
+  "schema": "bcenv.integration-sources.v1",
+  "runtime_base": "f3e37cb9f96c41334aa649a4f24813a880515ff8",
+  "source_repository": "https://github.com/anicolao/bcenv",
+  "files": {
+    "services/controller.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "83d585a54d1e3c8698cf7efba8ae16e494683230865b698e0677f9b7964b4929"
+    },
+    "services/scrimmage.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "6128436a9d2a43fca1a7359d9add89a64ce4598ed1d2b6b1f914ee56d674746a"
+    },
+    "services/replay_feedback.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "bd68a1c4a768a07cc90f7d0cd65017053d2d542fb9fc48f9fcc9b59d235be865"
+    },
+    "tests/test_controller.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "80b9d320532099383e8ad5ee87bbf7c59a0dc8276f34fe13d271c9aec15f528c"
+    },
+    "tests/test_scrimmage.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "d92ab899206f40184e2bd302d1643c471dff4e5d4604f5958bda60b61e4b8c3f"
+    },
+    "tests/test_replay_feedback.py": {
+      "commit": "04c815954154a9be691bb531245f74e35cbd6edf",
+      "sha256": "d18ceeb110997326b052b252522a4967efa5959b7d7082d7831b024b6ba8db55"
+    },
+    "services/responses_transport.py": {
+      "commit": "be041d3d18ecd9fa474cbfb076c86c336d5b6ff3",
+      "sha256": "da54bce79e4de81b616731b13991d5b6128a60ea862a901e2a7730f5f550925c"
+    },
+    "tests/test_responses_transport.py": {
+      "commit": "be041d3d18ecd9fa474cbfb076c86c336d5b6ff3",
+      "sha256": "f906fc49f65dc2c516923f6cea144c6a0581c2bc86344648aea4fe24b95442ee"
+    },
+    "services/controller_ledger.py": {
+      "commit": "8f2125d12db4df1f16bca721179ec52cf16273d6",
+      "sha256": "738c263437acb3427b8543f4481622c9966a7ce1ee42897fbc899c7a2badc2ff"
+    },
+    "tests/test_controller_ledger.py": {
+      "commit": "8f2125d12db4df1f16bca721179ec52cf16273d6",
+      "sha256": "1dd69392c4e4d94b4f71a94e89465dc0e8ddb097a37686417e2f8e6b2e0cc60d"
+    },
+    "tests/test_ledger.py": {
+      "commit": "8f2125d12db4df1f16bca721179ec52cf16273d6",
+      "sha256": "ac85db99623772fcef925ca0281c226d5459a7894ae941b3a00f8d067a9c87b4"
+    },
+    "services/ledger.py": {
+      "commit": "287ac43afb8b05d4e3006b14030323a0c2f9f997",
+      "sha256": "bb205424fb12ad9528d8c8c03be90a04343b78f6c75ed4c2fa13957036d3dbbb"
+    },
+    "services/worker_lifecycle.py": {
+      "commit": "287ac43afb8b05d4e3006b14030323a0c2f9f997",
+      "sha256": "a1521bd8f915a96fed423391d3d70659ef49a7a390bda95c560bf1446d3b8ead"
+    },
+    "tests/test_worker_lifecycle.py": {
+      "commit": "287ac43afb8b05d4e3006b14030323a0c2f9f997",
+      "sha256": "f86724740dbf28cd33ca0e757919b9101aa3da625fdcd4856845cc6add62dc88"
+    }
+  },
+  "notes": [
+    "Exact reviewed production and test bytes copied, not PR merges.",
+    "Replay contract producer note reconciled for integrated final-rules runtime.",
+    "Historical independent review snapshots retain their original hashes and scope."
+  ]
+}

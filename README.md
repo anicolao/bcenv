@@ -76,3 +76,10 @@ New runtime outputs use the official public 3.0.13 engine. Explicit 2.0.3
 diagnostic outputs preserve earlier experiments. See the [migration and evidence
 limits](docs/ENGINE-MIGRATION-2023.md); public final-rule comparisons do not
 reproduce the inaccessible private finals map distribution.
+
+## Integrated competitive preflight
+
+[Preflight scope and gates](docs/COMPETITIVE-PREFLIGHT.md) describe the reviewed
+trusted services integrated with the public final-rules runtime. The six-tool
+controller, durable job/artifact interfaces, offline model codec and synthetic
+worker are testable foundations. Real launch and heldouts remain closed.
