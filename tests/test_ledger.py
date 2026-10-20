@@ -1,5 +1,6 @@
 """Synthetic SQLite transactions/recovery only; no bots, games or credentials."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import FrozenInstanceError, asdict, replace
 import base64
 import io
@@ -75,7 +76,7 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(str(caught.exception), code)
 
     def sql(self, query, args=()):
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             return connection.execute(query, args).fetchall()
 
     def reserve(self, identifier, owner='alice', worker='worker'):
@@ -139,7 +140,7 @@ class LedgerTests(unittest.TestCase):
 
     def test_source_updates_and_deletes_are_blocked_by_database_invariants(self):
         identifier = self.submit()
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             for query in ('UPDATE source_files SET data=data', 'DELETE FROM source_files',
                           "UPDATE sources SET package='changed'", 'DELETE FROM sources'):
                 with self.assertRaises(sqlite3.IntegrityError):
@@ -150,7 +151,7 @@ class LedgerTests(unittest.TestCase):
         identifier = self.submit()
         # Trusted test corrupts its own DB to simulate storage damage. Database
         # ownership can bypass triggers, so triggers are not an isolation claim.
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute('DROP TRIGGER immutable_source_files_update')
             connection.execute('UPDATE source_files SET data=?', (b'x' * len(SOURCE),))
         self.error('storage_integrity', self.reserve, identifier)
@@ -461,11 +462,11 @@ os._exit(9)
     def test_configuration_schema_and_foreign_database_fail_closed(self):
         self.submit()
         self.error('configuration_mismatch', DurableLedger, self.path, limits=replace(self.limits, owner_records=99))
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute('PRAGMA user_version=99')
         self.error('incompatible_database', self.open)
         foreign = self.root / 'foreign.db'
-        with sqlite3.connect(foreign) as connection:
+        with closing(sqlite3.connect(foreign)) as connection, connection:
             connection.execute('CREATE TABLE unrelated (data TEXT)')
         self.error('incompatible_database', DurableLedger, foreign)
 
