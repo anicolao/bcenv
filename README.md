@@ -69,3 +69,20 @@ and [replica gates](docs/REPLICA-2023.md). This is separate from the proposed
 [bc-planner experiment plan](https://github.com/anicolao/bc-planner/pull/8).
 
 - [Authentic lecture-opponent diagnostic and export](docs/LECTURE-TRIAL-001.md)
+
+## Scrimmage service foundation
+
+[Bounded scrimmage contract](contracts/scrimmage-v1.md): trusted-side source intake,
+closed public results and synthetic adversarial tests. This is a non-executing
+scaffold outside the competitor runtime, not a deployed service or enforced agent
+boundary. Real heldouts are unsupported; replay learning and durable execution
+remain implementation gates.
+
+[Fixed-tool controller simulation](contracts/controller-v1.md) exercises a
+provider-neutral transport seam and bounded workspace/scrimmage dispatch using
+synthetic adapters. No real inference or enforced sandbox is implemented.
+
+[Bounded replay feedback projection](contracts/replay-feedback-v1.md) strips
+operational metadata and preserves capped gameplay evidence with explicit version
+and completeness markers. Synthetic tests cover malformed inputs and honest
+truncation; this is not yet a service replay route or an authenticity check.

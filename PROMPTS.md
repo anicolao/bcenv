@@ -370,3 +370,27 @@ Source: exact user message Sentinel_f7a0d196216c81918381aa77bc0467a0, 2026-10-19
 ````text
 you don't need approval to publish PRs, get back to work
 ````
+
+## Prompt 57: Build bounded scrimmage foundation
+
+Source: exact user message Sentinel_17c073ac43208191b751b3476d180b43, 2026-10-19 23:34:08 UTC, supplied by the coordinator. Source reconciliation: prior publication instruction is Prompt56; coordinator confirms this is the sole subsequent task-related user message. Scope is a non-executing service scaffold and tests; genuine isolation, replay release and durable execution remain blocked gates. No inaccessible history claimed audited; no merge authorized.
+
+````text
+OK. Now set yourself the goal of making the environment able to produce a truly competitive bot. You may have to work on this for days to achieve the goal which is a bcenv environment that enables the embodied LLM to make a bot which is a competent competitor. You will need to come up with a way for the LLM to compete in scrimmages just as it would in teh real competition without giving it access to the competition environment or competitor bots that you set up for it to beat, and it (and you) will need to be able to assess whether it is really able to create a winning bot against 2023 competitors. Work at this until you have a credible system for doing it, creating multiple PRs and summary documents as you go without further intervention from me. You will probably need to schedule a periodic reminder to check on progress and make sure things aren't getting stuck at a minimum, in addition to whatever else you come up with to stick with this goal over the long runnign horizon. Good luck!
+````
+
+## Prompt 58: Add fixed-tool controller simulation
+
+Repeated exact user goal Sentinel_17c073ac43208191b751b3476d180b43 for the controller follow-up. Source coverage remains through Prompt57; no new user message supplied. This adds only a synthetic controller/transport seam. It creates no credential, provider connection, real model launch or security permission. Independent malformed-input review findings were fixed before publication.
+
+````text
+OK. Now set yourself the goal of making the environment able to produce a truly competitive bot. You may have to work on this for days to achieve the goal which is a bcenv environment that enables the embodied LLM to make a bot which is a competent competitor. You will need to come up with a way for the LLM to compete in scrimmages just as it would in teh real competition without giving it access to the competition environment or competitor bots that you set up for it to beat, and it (and you) will need to be able to assess whether it is really able to create a winning bot against 2023 competitors. Work at this until you have a credible system for doing it, creating multiple PRs and summary documents as you go without further intervention from me. You will probably need to schedule a periodic reminder to check on progress and make sure things aren't getting stuck at a minimum, in addition to whatever else you come up with to stick with this goal over the long runnign horizon. Good luck!
+````
+
+## Prompt 59: Bound replay learning evidence
+
+Repeated exact user goal Sentinel_17c073ac43208191b751b3476d180b43 for trusted replay projection. Source reconciliation remains through Prompt58; no new user task message supplied. Independent review corrected per-match coverage contradictions and fixture indexes. All 126 pinned-Nix Python tests pass. This adds no live replay route, provider connection, heldout access or deployment boundary.
+
+````text
+OK. Now set yourself the goal of making the environment able to produce a truly competitive bot. You may have to work on this for days to achieve the goal which is a bcenv environment that enables the embodied LLM to make a bot which is a competent competitor. You will need to come up with a way for the LLM to compete in scrimmages just as it would in teh real competition without giving it access to the competition environment or competitor bots that you set up for it to beat, and it (and you) will need to be able to assess whether it is really able to create a winning bot against 2023 competitors. Work at this until you have a credible system for doing it, creating multiple PRs and summary documents as you go without further intervention from me. You will probably need to schedule a periodic reminder to check on progress and make sure things aren't getting stuck at a minimum, in addition to whatever else you come up with to stick with this goal over the long runnign horizon. Good luck!
+````
