@@ -9,16 +9,27 @@ import java.util.zip.GZIPInputStream;
 /** Bounded raw-record query. This does not reconstruct world state or bot knowledge. */
 public final class ReplayQuery {
     static final String FORMAT = "bcenv.bc2023.replay-query.v1";
-    static final int MAX_LIMIT = 10000;
+    static final String PAGE_FORMAT = "bcenv.bc2023.replay-query.v2";
+    static final int MAX_LIMIT = 10000, MAX_ROUND_SPAN = 256;
 
     static final class Selection {
-        final int start, end, limit;
+        final int start, end, limit, offset;
+        final boolean paged;
         final Integer robot;
         Selection(int start, int end, Integer robot, int limit) {
+            this(start, end, robot, limit, 0, false);
+        }
+        Selection(int start, int end, Integer robot, int limit, int offset) {
+            this(start, end, robot, limit, offset, true);
+        }
+        private Selection(int start, int end, Integer robot, int limit, int offset, boolean paged) {
             ReplaySummary.require(start >= 0 && end >= start, "round bounds require 0 <= start <= end");
             ReplaySummary.require(robot == null || robot >= 0, "robot ID must be nonnegative");
             ReplaySummary.require(limit >= 1 && limit <= MAX_LIMIT, "record limit must be between 1 and 10000");
+            ReplaySummary.require(offset >= 0 && offset <= ReplaySummary.MAX_RECORDS, "record offset out of bounds");
+            ReplaySummary.require(!paged || (long)end - start + 1 <= MAX_ROUND_SPAN, "page round span exceeds 256");
             this.start = start; this.end = end; this.robot = robot; this.limit = limit;
+            this.offset = offset; this.paged = paged;
         }
         boolean includes(int round, Integer id) {
             // Team deltas have no robot ID and remain explicitly team-scoped.
@@ -41,7 +52,7 @@ public final class ReplayQuery {
             if (!selection.includes(round, robot)) return null;
             matching++;
             Long count = counts.get(kind); counts.put(kind, count == null ? 1L : count + 1);
-            if (rows.size() >= selection.limit) return null;
+            if (matching <= selection.offset || rows.size() >= selection.limit) return null;
             Map<String,Object> row = ReplaySummary.obj("kind", kind, "match_index", match,
                 "event_index", event, "round", round, "row_index", index);
             if (robot != null) row.putAll(ReplaySummary.obj("robot_id", robot,
@@ -128,8 +139,10 @@ public final class ReplayQuery {
                 }
             }
         }
+        // The complete source was parsed and validated before checking actual EOF.
+        ReplaySummary.require(selection.offset <= out.matching, "record offset exceeds matching count");
         boolean truncated = out.matching > out.rows.size();
-        return ReplaySummary.obj("format", FORMAT, "status", summary.get("status"),
+        Map<String,Object> result = ReplaySummary.obj("format", selection.paged ? PAGE_FORMAT : FORMAT, "status", summary.get("status"),
             "spec_version", summary.get("spec_version"), "extracted_fields_valid", true,
             "all_schema_fields_validated", false, "source_stream_complete", "complete".equals(summary.get("status")),
             "query", ReplaySummary.obj("round_start", selection.start, "round_end", selection.end,
@@ -153,6 +166,21 @@ public final class ReplayQuery {
                 "The record cap retains the first matching records in documented presentation order; matching counts cover the entire validated stream, even after truncation.",
                 "selected_records_complete means all matching records present in the source were returned. It does not assert the requested rounds exist or the source stream is complete; inspect match coverage and source_stream_complete.",
                 "Only extracted core arrays and event ordering are validated; terrain, indicators, bytecodes, wells, islands, and other schema fields are not validated."));
+        if (selection.paged) {
+            Map<String,Object> query = (Map<String,Object>)result.get("query");
+            query.put("record_offset", selection.offset);
+            long end = (long)selection.offset + out.rows.size();
+            result.put("page_records_complete", true);
+            result.put("page_end_offset", end);
+            result.put("next_record_offset", end < out.matching ? end : null);
+            ((Map<String,Object>)result.get("limits")).put("max_round_span", MAX_ROUND_SPAN);
+            ((Map<String,Object>)result.get("limits")).put("max_record_offset", ReplaySummary.MAX_RECORDS);
+            List<String> semantics = new ArrayList<String>((List<String>)result.get("semantics"));
+            semantics.set(7, "The page is the exact bounded slice at record_offset in matching presentation order. Counts and match coverage span the entire validated stream, including before/after the page.");
+            semantics.add("page_records_complete means the requested bounded source slice is present; selected_records_complete means this single page contains every matching row in the window. Neither asserts requested rounds exist.");
+            result.put("semantics", semantics);
+        }
+        return result;
     }
 
     static byte[] boundedRead(InputStream in, String kind) throws IOException {
@@ -190,14 +218,20 @@ public final class ReplayQuery {
 
     public static void main(String[] args) {
         int exit = 0; Map<String,Object> result;
+        boolean paged = args.length > 0 && "--page".equals(args[0]);
         try {
-            ReplaySummary.require(args.length == 5, "usage: ReplayQuery replay.bc23 round-start round-end robot-id-or-all limit");
-            Selection selection = new Selection(Integer.parseInt(args[1]), Integer.parseInt(args[2]),
-                "all".equals(args[3]) ? null : Integer.valueOf(args[3]), Integer.parseInt(args[4]));
-            result = query(Paths.get(args[0]), selection);
+            ReplaySummary.require(paged ? args.length == 7 : args.length == 5,
+                "usage: ReplayQuery [--page] replay.bc23 round-start round-end robot-id-or-all limit [record-offset]");
+            int base = paged ? 1 : 0;
+            int start = Integer.parseInt(args[base + 1]), end = Integer.parseInt(args[base + 2]);
+            Integer robot = "all".equals(args[base + 3]) ? null : Integer.valueOf(args[base + 3]);
+            int limit = Integer.parseInt(args[base + 4]);
+            Selection selection = paged ? new Selection(start, end, robot, limit, Integer.parseInt(args[6]))
+                : new Selection(start, end, robot, limit);
+            result = query(Paths.get(args[base]), selection);
             if (!"complete".equals(result.get("status"))) exit = 2;
         } catch (IOException | RuntimeException e) {
-            result = ReplaySummary.obj("format", FORMAT, "status", "invalid", "extracted_fields_valid", false,
+            result = ReplaySummary.obj("format", paged ? PAGE_FORMAT : FORMAT, "status", "invalid", "extracted_fields_valid", false,
                 "error", e.getClass().getSimpleName() + ": " + e.getMessage()); exit = 2;
         }
         System.out.println(ReplaySummary.json(result));
