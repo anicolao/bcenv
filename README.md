@@ -81,3 +81,8 @@ remain implementation gates.
 [Fixed-tool controller simulation](contracts/controller-v1.md) exercises a
 provider-neutral transport seam and bounded workspace/scrimmage dispatch using
 synthetic adapters. No real inference or enforced sandbox is implemented.
+
+[Bounded replay feedback projection](contracts/replay-feedback-v1.md) strips
+operational metadata and preserves capped gameplay evidence with explicit version
+and completeness markers. Synthetic tests cover malformed inputs and honest
+truncation; this is not yet a service replay route or an authenticity check.
