@@ -92,3 +92,9 @@ retention, owner-scoped idempotency/quotas and fenced crash recovery. Principal
 strings are trusted test context, not authentication; database fencing does not
 terminate workers. [Independent review](docs/DURABLE-LEDGER-REVIEW.md) records
 the passing tests, corrected defects and unpassed deployment gates.
+
+[Synthetic controller-to-ledger composition](contracts/controller-ledger-v1.md)
+connects trusted immutable source-export receipts to run-owned artifacts and
+durable jobs. It preserves the six tools and refuses stdout/path claims as
+export authority. Actual sandbox capture, authentication and replay delivery
+remain separate gates.
