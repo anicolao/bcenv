@@ -83,3 +83,8 @@ reproduce the inaccessible private finals map distribution.
 trusted services integrated with the public final-rules runtime. The six-tool
 controller, durable job/artifact interfaces, offline model codec and synthetic
 worker are testable foundations. Real launch and heldouts remain closed.
+
+[Replay page producer and projection v2](contracts/replay-feedback-v2.md) add
+real post-filter record offsets and explicit coverage/progress markers, preserving
+v1 behavior. Read-only replay pages can reach later events; service ownership and
+routing are a separate integration and real launch remains closed.
