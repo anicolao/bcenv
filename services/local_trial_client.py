@@ -81,6 +81,10 @@ def main():
     route.add_argument('--mailbox')
     subs = parser.add_subparsers(dest='operation', required=True)
     submit = subs.add_parser('submit'); submit.add_argument('--source', required=True); submit.add_argument('--package', required=True)
+    submit.add_argument('--note-id'); submit.add_argument('--note-sha256')
+    note = subs.add_parser('note'); note.add_argument('--source', required=True); note.add_argument('--package', required=True)
+    note.add_argument('--text-file', required=True, help='UTF-8 prediction note, at most 4096 bytes')
+    note.add_argument('--replay-reference', action='append', default=[])
     result = subs.add_parser('result'); result.add_argument('--submission', required=True)
     replay = subs.add_parser('replay'); replay.add_argument('--submission', required=True); replay.add_argument('--game', type=int, required=True)
     replay.add_argument('--start', type=int, required=True); replay.add_argument('--end', type=int, required=True)
@@ -90,8 +94,18 @@ def main():
     if args.endpoint and (endpoint.scheme != 'http' or endpoint.hostname != '127.0.0.1' or endpoint.path != '/v1' or endpoint.query or endpoint.fragment or endpoint.username or endpoint.password):
         parser.error('Use the provided 127.0.0.1 /v1 endpoint')
     body = {'operation': args.operation}
-    if args.operation == 'submit':
+    if args.operation in ('submit', 'note'):
         body.update(package=args.package, source_zip_base64=base64.b64encode(source_zip(args.source,args.package)).decode())
+        if args.operation == 'note':
+            with Path(args.text_file).open('rb') as handle:
+                note_bytes = handle.read(4097)
+            if len(note_bytes) > 4096:
+                parser.error('Note exceeds 4096 UTF-8 bytes')
+            body.update(text=note_bytes.decode('utf-8'), replay_references=args.replay_reference)
+        elif args.note_id is not None or args.note_sha256 is not None:
+            if args.note_id is None or args.note_sha256 is None:
+                parser.error('Provide both --note-id and --note-sha256')
+            body.update(note_id=args.note_id, note_sha256=args.note_sha256)
     else:
         body['submission_id'] = args.submission
         if args.operation == 'replay':

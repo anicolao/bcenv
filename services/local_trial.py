@@ -7,6 +7,7 @@ No BoundaryAttestation or production launch gate is changed by this profile.
 """
 import argparse
 import base64
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -28,6 +29,8 @@ SCHEMA = 'bcenv.local-trial.v1'
 ID = re.compile(r's_[0-9a-f]{32}\Z')
 MAX_REQUEST = 1500000
 MAX_RESPONSE = 65536
+NOTE_ERRORS = {'notes_disabled', 'note_limit', 'invalid_note', 'unknown_replay_reference',
+               'note_required', 'unknown_note', 'note_mismatch', 'note_already_used'}
 
 
 def encoded(value):
@@ -161,7 +164,13 @@ class AdapterWorker:
 
 
 class LocalTrial:
-    def __init__(self, root, worker, *, max_submissions=12, max_reads=2000, max_replay_queries=150):
+    def __init__(self, root, worker, *, max_submissions=12, max_reads=2000, max_replay_queries=150,
+                 require_experiment_notes=False, max_notes=24):
+        if type(require_experiment_notes) is not bool or type(max_notes) is not int or not 1 <= max_notes <= 32:
+            raise ValueError('invalid_note_config')
+        self.require_experiment_notes, self.max_notes = require_experiment_notes, max_notes
+        self.notes, self.used_notes, self.replay_references = {}, set(), {}
+        self.audit_sequence, self.audit_hash = 0, '0' * 64
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=False)  # fresh-run ownership, never silently resume
         self.worker = worker
@@ -173,8 +182,61 @@ class LocalTrial:
         self.halted = False
 
     def audit(self, operation, response):
-        with (self.root / 'audit.jsonl').open('ab') as handle:
-            handle.write(encoded({'time_ns': time.time_ns(), 'operation': operation, 'response': response}) + b'\n')
+        # Called under self.lock. Sequence, not wall time, establishes order.
+        event = {'sequence': self.audit_sequence + 1, 'time_ns': time.time_ns(),
+                 'previous_sha256': self.audit_hash, 'operation': operation, 'response': response}
+        event_hash = hashlib.sha256(encoded(event)).hexdigest()
+        try:
+            with (self.root / 'audit.jsonl').open('ab') as handle:
+                handle.write(encoded(dict(event, event_sha256=event_hash)) + b'\n')
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError:
+            self.halted = True
+            raise
+        self.audit_sequence, self.audit_hash = event['sequence'], event_hash
+        return {'sequence': event['sequence'], 'time_ns': event['time_ns'], 'event_sha256': event_hash}
+
+    def _accept_request_source(self, request):
+        value = request['source_zip_base64']
+        if type(value) is not str or len(value) > 1400000:
+            raise ValueError('invalid_archive')
+        try:
+            archive = base64.b64decode(value, validate=True)
+        except (ValueError, TypeError):
+            raise ValueError('invalid_archive') from None
+        return accept_source_zip(archive, request['package'])
+
+    def _note(self, request):
+        if not self.require_experiment_notes:
+            raise ValueError('notes_disabled')
+        if self.halted:
+            raise ValueError('run_halted')
+        if set(request) != {'operation', 'package', 'source_zip_base64', 'text', 'replay_references'}:
+            raise ValueError('invalid_note')
+        if len(self.notes) >= self.max_notes:
+            raise ValueError('note_limit')
+        text, refs = request['text'], request['replay_references']
+        if type(text) is not str or not text.strip() or len(text.encode('utf-8')) > 4096:
+            raise ValueError('invalid_note')
+        if (type(refs) is not list or len(refs) > 8 or any(type(r) is not str for r in refs) or
+                len(set(refs)) != len(refs)):
+            raise ValueError('invalid_note')
+        if any(r not in self.replay_references for r in refs):
+            raise ValueError('unknown_replay_reference')
+        accepted = self._accept_request_source(request)
+        note = {'note_id': 'n_' + uuid.uuid4().hex, 'source_sha256': accepted.content_sha256, 'package': accepted.package,
+                'text': text, 'replay_references': [self.replay_references[r] for r in refs]}
+        note_hash = hashlib.sha256(encoded(note)).hexdigest()
+        response = dict(note, schema=SCHEMA, status='noted', note_sha256=note_hash)
+        try:
+            receipt = self.audit('experiment_note', response)
+        except OSError:
+            self.halted = True
+            raise ValueError('run_halted') from None
+        response['audit_receipt'] = receipt
+        self.notes[note['note_id']] = json.loads(encoded(response))
+        return json.loads(encoded(response))
 
     def _lookup(self, value):
         if type(value) is not str or not ID.fullmatch(value) or value not in self.records:
@@ -199,9 +261,12 @@ class LocalTrial:
                 pass
             result = {'status': 'infrastructure_failure', 'reason': 'worker_failure'}
         with self.lock:
-            response = dict(result, schema=SCHEMA, submission_id=sid, source_sha256=accepted.content_sha256)
+            binding = {key: self.records[sid][key] for key in ('note_id', 'note_sha256', 'note_sequence', 'submission_receipt')
+                       if key in self.records[sid]}
+            response = dict(result, schema=SCHEMA, submission_id=sid, source_sha256=accepted.content_sha256, **binding)
             if len(encoded(response)) > MAX_RESPONSE:
-                response = {'schema': SCHEMA, 'submission_id': sid, 'status': 'infrastructure_failure', 'reason': 'output_limit'}
+                response = {'schema': SCHEMA, 'submission_id': sid, 'source_sha256': accepted.content_sha256,
+                            'status': 'infrastructure_failure', 'reason': 'output_limit', **binding}
             if response['status'] == 'infrastructure_failure':
                 self.halted = True
             self.records[sid] = response
@@ -210,39 +275,67 @@ class LocalTrial:
                 self.audit('complete', response)
             except OSError:
                 self.halted = True
-                self.records[sid] = {'schema': SCHEMA, 'submission_id': sid,
-                                     'status': 'infrastructure_failure', 'reason': 'persistence_failure'}
+                self.records[sid] = {'schema': SCHEMA, 'submission_id': sid, 'source_sha256': accepted.content_sha256,
+                                     'status': 'infrastructure_failure', 'reason': 'persistence_failure', **binding}
 
     def dispatch(self, request):
         with self.lock:
             if self.closed or type(request) is not dict:
                 raise ValueError('invalid_request')
             op = request.get('operation')
+            if op == 'note':
+                return self._note(request)
             if op == 'submit':
                 if self.halted:
                     raise ValueError('run_halted')
-                if set(request) != {'operation', 'package', 'source_zip_base64'}:
+                expected = {'operation', 'package', 'source_zip_base64'}
+                if self.require_experiment_notes:
+                    expected |= {'note_id', 'note_sha256'}
+                    if 'note_id' not in request or 'note_sha256' not in request:
+                        raise ValueError('note_required')
+                if set(request) != expected:
                     raise ValueError('invalid_request')
                 if len(self.records) >= self.max_submissions or sum(r['status'] == 'accepted' for r in self.records.values()) >= 2:
                     raise ValueError('submission_limit')
-                value = request['source_zip_base64']
-                if type(value) is not str or len(value) > 1400000:
-                    raise ValueError('invalid_archive')
-                try:
-                    archive = base64.b64decode(value, validate=True)
-                except (ValueError, TypeError):
-                    raise ValueError('invalid_archive') from None
-                accepted = accept_source_zip(archive, request['package'])
+                accepted = self._accept_request_source(request)
+                binding = {}
+                if self.require_experiment_notes:
+                    note_id = request['note_id']
+                    if type(note_id) is not str or note_id not in self.notes:
+                        raise ValueError('unknown_note')
+                    note = self.notes[note_id]
+                    if note_id in self.used_notes:
+                        raise ValueError('note_already_used')
+                    if (note['source_sha256'] != accepted.content_sha256 or note['package'] != accepted.package or
+                            request['note_sha256'] != note['note_sha256'] or
+                            not 0 < note['audit_receipt']['sequence'] <= self.audit_sequence):
+                        raise ValueError('note_mismatch')
+                    binding = {'note_id': note_id, 'note_sha256': note['note_sha256'],
+                               'note_sequence': note['audit_receipt']['sequence']}
                 sid = 's_' + uuid.uuid4().hex
-                response = {'schema': SCHEMA, 'submission_id': sid, 'status': 'accepted', 'source_sha256': accepted.content_sha256}
+                response = {'schema': SCHEMA, 'submission_id': sid, 'status': 'accepted', 'source_sha256': accepted.content_sha256, **binding}
                 try:
-                    self.audit('submit', response)
+                    receipt = self.audit('submit', response)
                 except OSError:
                     self.halted = True
                     raise ValueError('run_halted') from None
+                if self.require_experiment_notes:
+                    self.used_notes.add(note_id)
+                    response['submission_receipt'] = receipt
                 self.records[sid] = response
-                self.executor.submit(self._run, sid, accepted)
-                return dict(response)
+                try:
+                    self.executor.submit(self._run, sid, accepted)
+                except Exception:
+                    # Scheduling failure is terminal; never retry an uncertain dispatch.
+                    self.halted = True
+                    response = dict(response, status='infrastructure_failure', reason='scheduling_failure')
+                    self.records[sid] = response
+                    try:
+                        (self.root / ('submission-failure-' + sid + '.json')).write_bytes(encoded(response))
+                        self.audit('complete', response)
+                    except OSError:
+                        pass
+                return json.loads(encoded(response))
             self.reads += 1
             if self.reads > self.max_reads:
                 raise ValueError('read_limit')
@@ -273,10 +366,20 @@ class LocalTrial:
                     self.halted = True
                     self.audit('halt', {'reason': 'replay_failure', 'submission_id': sid, 'game_index': index})
                     raise ValueError('replay_unavailable') from None
-                self.audit('replay', {'submission_id': sid, 'game_index': index, 'query': q})
-                return {'schema': SCHEMA, 'status': 'replay', 'submission_id': sid,
-                        'game_index': index, 'replay_sha256': record['games'][index]['replay_sha256'],
-                        'feedback': response}
+                replay_hash = record['games'][index]['replay_sha256']
+                reference = {'reference_id': 'r_' + uuid.uuid4().hex, 'submission_id': sid,
+                             'game_index': index, 'source_sha256': record['source_sha256'],
+                             'replay_sha256': replay_hash, 'query': q,
+                             'feedback_sha256': hashlib.sha256(encoded(response)).hexdigest()}
+                receipt = self.audit('replay', reference if self.require_experiment_notes else
+                                     {'submission_id': sid, 'game_index': index, 'query': q})
+                result = {'schema': SCHEMA, 'status': 'replay', 'submission_id': sid,
+                          'game_index': index, 'replay_sha256': replay_hash, 'feedback': response}
+                if self.require_experiment_notes:
+                    reference['audit_receipt'] = receipt
+                    self.replay_references[reference['reference_id']] = json.loads(encoded(reference))
+                    result['replay_reference'] = json.loads(encoded(reference))
+                return result
             raise ValueError('invalid_request')
 
     def close(self):
@@ -309,7 +412,7 @@ def make_server(trial, port=0):
             except Exception as error:
                 allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
                            'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
-                reason = str(error) if str(error) in allowed else 'request_failed'
+                reason = str(error) if str(error) in allowed | NOTE_ERRORS else 'request_failed'
                 payload, code = encoded({'schema': SCHEMA, 'status': 'error', 'reason': reason}), 400
             self.send_response(code)
             self.send_header('Content-Type', 'application/json')
@@ -342,7 +445,7 @@ def closed_dispatch(trial, payload):
         allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
                    'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
         return encoded({'schema': SCHEMA, 'status': 'error',
-                        'reason': str(error) if str(error) in allowed else 'request_failed'})
+                        'reason': str(error) if str(error) in allowed | NOTE_ERRORS else 'request_failed'})
 
 
 def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=86400):
@@ -421,7 +524,9 @@ def main():
     args = parser.parse_args()
     config = read_json(args.config)
     worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90))
-    trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12))
+    trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12),
+                       require_experiment_notes=config.get('require_experiment_notes', False),
+                       max_notes=config.get('max_notes', 24))
     if args.mailbox:
         serve_mailbox(trial, args.mailbox)
         return
