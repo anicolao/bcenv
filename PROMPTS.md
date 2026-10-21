@@ -447,3 +447,14 @@ Repeated exact authority Sentinel_7394f361f4e881919d712f2e0bda2fd6, received Oct
 ````text
 Ok let's proceed.
 ````
+
+## Prompt 66: Clarify candidate Java checks
+
+Repeated authority for a separate future-trial generic local build/test helper;
+original source Sentinel_7394f361f4e881919d712f2e0bda2fd6, received October 21, 2026
+at 13:07:30 UTC. Exact sent_at unavailable. This does not change frozen competitor
+or evaluator runtime, launch a trial, or authorize merge/cost/security changes.
+
+````text
+Ok let's proceed.
+````
