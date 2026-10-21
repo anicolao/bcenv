@@ -439,3 +439,11 @@ new user quotation, merge authority, cost, or security-setting approval is infer
 ````text
 Ok let's proceed.
 ````
+
+## Prompt 65: Repair concurrent ledger initialization
+
+Repeated exact authority Sentinel_7394f361f4e881919d712f2e0bda2fd6, received October21,2026 at13:07:30UTC. Task-message coverage remains entries61–63; no additional direct user message supplied to worker. CI surfaced a reproduced existing SQLite WAL initialization race. Repair is limited to a bounded idempotent storage-mode transition, never job retries or weakened ledger checks. No frozen runtime, competitor or heldout artifact changed.
+
+````text
+Ok let's proceed.
+````

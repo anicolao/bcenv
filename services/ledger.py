@@ -19,6 +19,7 @@ from services.scrimmage import (AcceptedSubmission, IntakeLimits, SourceFile,
 
 _APPLICATION_ID = 0x4243454E
 _SCHEMA_VERSION = 1
+_SQLITE_TIMEOUT = 5.0
 _NAME = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 _KEY = re.compile(r'[A-Za-z0-9_-]{1,128}\Z')
 _ID = re.compile(r's_[0-9a-f]{32}\Z')
@@ -172,7 +173,7 @@ class DurableLedger:
             connection.execute('PRAGMA application_id=' + str(_APPLICATION_ID))
             connection.execute('PRAGMA user_version=' + str(_SCHEMA_VERSION))
             connection.commit()
-            connection.execute('PRAGMA journal_mode=WAL')
+            self._enable_wal(connection)
         except LedgerError:
             if connection is not None:
                 connection.rollback()
@@ -185,8 +186,32 @@ class DurableLedger:
             if connection is not None:
                 connection.close()
 
+    @staticmethod
+    def _enable_wal(connection):
+        # Journal-mode changes occur outside the serialized schema transaction.
+        # A concurrent constructor/operation can briefly hold a lock here; SQLite
+        # may return BUSY without invoking its busy handler for this transition.
+        # Retry only this idempotent mode change, never a schema/job transaction
+        # or an uncertain commit. Other storage failures remain closed errors.
+        deadline = time.monotonic() + _SQLITE_TIMEOUT
+        while True:
+            remaining = max(0.0, deadline - time.monotonic())
+            connection.execute('PRAGMA busy_timeout=' + str(int(remaining * 1000)))
+            try:
+                mode = connection.execute('PRAGMA journal_mode=WAL').fetchone()[0]
+                if mode.lower() != 'wal':
+                    raise LedgerError('storage_unavailable')
+                return
+            except sqlite3.OperationalError as error:
+                if (getattr(error, 'sqlite_errorcode', -1) & 0xff) != sqlite3.SQLITE_BUSY:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
+                time.sleep(min(0.01, remaining))
+
     def _connect(self):
-        connection = sqlite3.connect(str(self.path), timeout=5, isolation_level=None)
+        connection = sqlite3.connect(str(self.path), timeout=_SQLITE_TIMEOUT, isolation_level=None)
         try:
             connection.row_factory = sqlite3.Row
             connection.execute('PRAGMA foreign_keys=ON')
