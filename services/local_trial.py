@@ -1,0 +1,438 @@
+"""Cooperative single-user BC23 trial service. NOT a hostile-tenant sandbox.
+
+Only public development opponents may be configured while an agent is active.
+Loopback and bounded schemas prevent accidental routing/path mistakes; same-user
+agents can still access host files/tools. Stop the agent before heldout evaluation.
+No BoundaryAttestation or production launch gate is changed by this profile.
+"""
+import argparse
+import base64
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
+import os
+import stat
+from pathlib import Path
+import re
+import threading
+import time
+import uuid
+
+from runtime.artifacts import execute, digest
+from services.scrimmage import accept_source_zip, SubmissionRejected
+from services.replay_feedback_v2 import ReplayPageQuery, project_replay_feedback_page
+from services.replay_feedback import FeedbackLimits
+
+SCHEMA = 'bcenv.local-trial.v1'
+ID = re.compile(r's_[0-9a-f]{32}\Z')
+MAX_REQUEST = 1500000
+MAX_RESPONSE = 65536
+
+
+def encoded(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+
+
+def read_json(path, cap=2_000_000):
+    path = Path(path)
+    if path.stat().st_size > cap:
+        raise ValueError('artifact_limit')
+    return json.loads(path.read_bytes())
+
+
+@dataclass(frozen=True)
+class DevelopmentGame:
+    label: str
+    opponent_build: str
+    map_path: str
+    own_slot: str
+
+    def __post_init__(self):
+        if (not re.fullmatch(r'[A-Za-z0-9_-]{1,48}', self.label) or
+                self.own_slot not in ('A', 'B')):
+            raise ValueError('invalid_game')
+
+
+class AdapterWorker:
+    """Trusted fixed executable + fixed development schedule; no client paths."""
+    def __init__(self, command, games, timeout=90, spec_version='3.0.13'):
+        if (not command or not all(type(x) is str for x in command) or
+                not 1 <= len(games) <= 8 or type(timeout) is not int or not 1 <= timeout <= 120 or
+                spec_version != '3.0.13'):
+            raise ValueError('invalid_worker_config')
+        self.command, self.games, self.timeout, self.spec_version = list(command), tuple(games), timeout, spec_version
+
+    def invoke(self, root, name, arguments, multiplier=1):
+        # Adapter subcommands have their own per-process wall timeouts. Outer
+        # limit covers its bounded sequential processes, not aggregate resources.
+        result = execute(self.command + arguments + ['--timeout', str(self.timeout)],
+                         root / (name + '.log'), self.timeout * multiplier + 15)
+        return result['exit_code'] == 0
+
+    def run(self, root, submission):
+        source = root / 'source'
+        source.mkdir()
+        for item in submission.files:
+            path = source / item.path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(item.data)
+        if not self.invoke(root, 'build', ['build', '--source', str(source), '--package', submission.package,
+                           '--output', str(root / 'build')], 2):
+            artifact = read_json(root / 'build' / 'artifact.json')
+            steps = artifact.get('steps')
+            if (artifact.get('status') != 'failed' or type(steps) is not list or not steps or
+                    any(step.get('status') == 'timeout' or step.get('launch_error') or
+                        type(step.get('exit_code')) is not int or step['exit_code'] < 0 for step in steps) or
+                    steps[-1].get('status') != 'failed' or steps[-1]['exit_code'] == 0):
+                raise ValueError('build_infrastructure_failure')
+            diagnostics = ''
+            for name in ('compile.log', 'verify.log'):
+                path = root / 'build' / name
+                if path.is_file():
+                    with path.open('rb') as handle:
+                        diagnostics += handle.read(8192).decode('utf-8', 'replace')
+            diagnostics = diagnostics.replace(str(root), '<trial>')[:8192]
+            return {'status': 'rejected', 'reason': 'compile_rejected', 'diagnostics': diagnostics}
+        if not self.invoke(root, 'package', ['package', '--build', str(root / 'build'), '--output', str(root / 'package')]):
+            raise ValueError('package_failure')
+        games = []
+        for index, game in enumerate(self.games):
+            own, opponent = str(root / 'build'), game.opponent_build
+            a, b = (own, opponent) if game.own_slot == 'A' else (opponent, own)
+            out = root / ('game-' + str(index))
+            invoked = self.invoke(root, 'game-' + str(index), ['run', '--team-a', a, '--team-b', b,
+                        '--map', game.map_path, '--output', str(out)], 2)
+            result = read_json(out / 'result.json')
+            status = result.get('status')
+            completed = (invoked and status == 'completed' and result.get('winner') in ('A', 'B')
+                         and result.get('engine_version') == self.spec_version)
+            rounds = None
+            if completed:
+                summary = read_json(out / 'replay-summary.json')
+                matches = summary.get('matches')
+                if type(matches) is not list or len(matches) != 1:
+                    completed = False
+                else:
+                    rounds = matches[0].get('total_rounds')
+                    if type(rounds) is not int or not 1 <= rounds <= 1000000:
+                        completed, rounds = False, None
+            games.append({'index': index, 'label': game.label, 'own_slot': game.own_slot,
+                          'status': 'completed' if completed else 'infrastructure_failure',
+                          'outcome': ('win' if result['winner'] == game.own_slot else 'loss') if completed else None,
+                          'replay_sha256': digest(out / 'replay.bc23') if completed else None,
+                          'total_rounds': rounds, 'terminal_reason': None})
+            # No terminal-reason field is extracted by ReplaySummary. Do not
+            # invent a victory condition from round count or winner.
+            if not completed:
+                break
+        return {'status': 'complete' if all(g['status'] == 'completed' for g in games) else 'infrastructure_failure',
+                'games': games, 'wins': sum(g['outcome'] == 'win' for g in games),
+                'losses': sum(g['outcome'] == 'loss' for g in games)}
+
+    def replay(self, root, submission_id, game_index, query, expected_replay_sha256):
+        game = self.games[game_index]
+        match = root / ('game-' + str(game_index))
+        result = read_json(match / 'result.json')
+        if result.get('status') != 'completed':
+            raise ValueError('replay_unavailable')
+        replay_path = match / 'replay.bc23'
+        if digest(replay_path) != expected_replay_sha256:
+            raise ValueError('replay_changed')
+        out = root / ('query-' + uuid.uuid4().hex)
+        args = ['replay', 'page', '--replay', str(match / 'replay.bc23'), '--round-start', str(query.round_start),
+                '--round-end', str(query.round_end), '--record-offset', str(query.record_offset),
+                '--limit', str(query.record_limit), '--output', str(out)]
+        if query.robot_id is not None:
+            args += ['--robot-id', str(query.robot_id)]
+        if not self.invoke(root, out.name, args):
+            raise ValueError('replay_unavailable')
+        query_path = out / 'replay-query.json'
+        if query_path.stat().st_size > 2_000_000:
+            raise ValueError('query_limit')
+        raw = query_path.read_bytes()
+        if digest(replay_path) != expected_replay_sha256:
+            raise ValueError('replay_changed')
+        projected = project_replay_feedback_page(raw, submission_id=submission_id,
+                      job_id='j_' + submission_id[2:], own_team_id=1 if game.own_slot == 'A' else 2,
+                      expected_spec_version=self.spec_version, expected_query=query,
+                      limits=FeedbackLimits(max_records=128, max_output_encoded_bytes=32768))
+        return json.loads(projected)
+
+
+class LocalTrial:
+    def __init__(self, root, worker, *, max_submissions=12, max_reads=2000, max_replay_queries=150):
+        self.root = Path(root).resolve()
+        self.root.mkdir(parents=True, exist_ok=False)  # fresh-run ownership, never silently resume
+        self.worker = worker
+        self.max_submissions, self.max_reads, self.max_replay_queries = max_submissions, max_reads, max_replay_queries
+        self.records, self.reads, self.replays = {}, 0, 0
+        self.lock = threading.RLock()
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.closed = False
+        self.halted = False
+
+    def audit(self, operation, response):
+        with (self.root / 'audit.jsonl').open('ab') as handle:
+            handle.write(encoded({'time_ns': time.time_ns(), 'operation': operation, 'response': response}) + b'\n')
+
+    def _lookup(self, value):
+        if type(value) is not str or not ID.fullmatch(value) or value not in self.records:
+            raise ValueError('unknown_submission')
+        return self.records[value]
+
+    def _run(self, sid, accepted):
+        root = self.root / sid
+        try:
+            root.mkdir()
+            with self.lock:
+                halted = self.halted
+            result = ({'status': 'infrastructure_failure', 'reason': 'run_halted'} if halted
+                      else self.worker.run(root, accepted))
+            if type(result) is not dict or result.get('status') not in ('complete', 'rejected', 'infrastructure_failure'):
+                raise ValueError('invalid_worker_result')
+        except Exception as error:
+            # Exact trusted error remains local; never release host paths.
+            try:
+                (root / 'failure.txt').write_text(type(error).__name__ + ': ' + str(error))
+            except OSError:
+                pass
+            result = {'status': 'infrastructure_failure', 'reason': 'worker_failure'}
+        with self.lock:
+            response = dict(result, schema=SCHEMA, submission_id=sid, source_sha256=accepted.content_sha256)
+            if len(encoded(response)) > MAX_RESPONSE:
+                response = {'schema': SCHEMA, 'submission_id': sid, 'status': 'infrastructure_failure', 'reason': 'output_limit'}
+            if response['status'] == 'infrastructure_failure':
+                self.halted = True
+            self.records[sid] = response
+            try:
+                (root / 'public-result.json').write_bytes(encoded(response))
+                self.audit('complete', response)
+            except OSError:
+                self.halted = True
+                self.records[sid] = {'schema': SCHEMA, 'submission_id': sid,
+                                     'status': 'infrastructure_failure', 'reason': 'persistence_failure'}
+
+    def dispatch(self, request):
+        with self.lock:
+            if self.closed or type(request) is not dict:
+                raise ValueError('invalid_request')
+            op = request.get('operation')
+            if op == 'submit':
+                if self.halted:
+                    raise ValueError('run_halted')
+                if set(request) != {'operation', 'package', 'source_zip_base64'}:
+                    raise ValueError('invalid_request')
+                if len(self.records) >= self.max_submissions or sum(r['status'] == 'accepted' for r in self.records.values()) >= 2:
+                    raise ValueError('submission_limit')
+                value = request['source_zip_base64']
+                if type(value) is not str or len(value) > 1400000:
+                    raise ValueError('invalid_archive')
+                try:
+                    archive = base64.b64decode(value, validate=True)
+                except (ValueError, TypeError):
+                    raise ValueError('invalid_archive') from None
+                accepted = accept_source_zip(archive, request['package'])
+                sid = 's_' + uuid.uuid4().hex
+                response = {'schema': SCHEMA, 'submission_id': sid, 'status': 'accepted', 'source_sha256': accepted.content_sha256}
+                try:
+                    self.audit('submit', response)
+                except OSError:
+                    self.halted = True
+                    raise ValueError('run_halted') from None
+                self.records[sid] = response
+                self.executor.submit(self._run, sid, accepted)
+                return dict(response)
+            self.reads += 1
+            if self.reads > self.max_reads:
+                raise ValueError('read_limit')
+            if op == 'result' and set(request) == {'operation', 'submission_id'}:
+                response = json.loads(encoded(self._lookup(request['submission_id'])))
+                self.audit('result', response)
+                return response
+            if op == 'replay' and set(request) == {'operation', 'submission_id', 'game_index', 'query'}:
+                sid, index = request['submission_id'], request['game_index']
+                record = self._lookup(sid)
+                if (record['status'] not in ('complete', 'infrastructure_failure') or type(index) is not int or
+                        not 0 <= index < len(record.get('games', [])) or
+                        record['games'][index].get('status') != 'completed'):
+                    raise ValueError('replay_unavailable')
+                q = request['query']
+                if type(q) is not dict or set(q) != {'round_start', 'round_end', 'robot_id', 'record_offset', 'record_limit'}:
+                    raise ValueError('invalid_query')
+                query = ReplayPageQuery(**q)
+                if query.record_limit > 128:
+                    raise ValueError('invalid_query')
+                self.replays += 1
+                if self.replays > self.max_replay_queries:
+                    raise ValueError('replay_limit')
+                try:
+                    response = self.worker.replay(self.root / sid, sid, index, query,
+                                                  record['games'][index]['replay_sha256'])
+                except Exception:
+                    self.halted = True
+                    self.audit('halt', {'reason': 'replay_failure', 'submission_id': sid, 'game_index': index})
+                    raise ValueError('replay_unavailable') from None
+                self.audit('replay', {'submission_id': sid, 'game_index': index, 'query': q})
+                return {'schema': SCHEMA, 'status': 'replay', 'submission_id': sid,
+                        'game_index': index, 'replay_sha256': record['games'][index]['replay_sha256'],
+                        'feedback': response}
+            raise ValueError('invalid_request')
+
+    def close(self):
+        with self.lock:
+            self.closed = True
+        self.executor.shutdown(wait=True)
+
+
+def make_server(trial, port=0):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            try:
+                self.connection.settimeout(10)
+                if self.path != '/v1' or self.headers.get('Transfer-Encoding') is not None:
+                    raise ValueError('invalid_request')
+                size = int(self.headers.get('Content-Length', '-1'))
+                if not 0 < size <= MAX_REQUEST:
+                    raise ValueError('request_limit')
+                raw = self.rfile.read(size)
+                if len(raw) != size:
+                    raise ValueError('invalid_request')
+                response = trial.dispatch(json.loads(raw))
+                payload = encoded(response)
+                if len(payload) > MAX_RESPONSE:
+                    raise ValueError('output_limit')
+                code = 200
+            except Exception as error:
+                allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
+                           'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
+                reason = str(error) if str(error) in allowed else 'request_failed'
+                payload, code = encoded({'schema': SCHEMA, 'status': 'error', 'reason': reason}), 400
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(payload)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.wfile.write(payload)
+    return HTTPServer(('127.0.0.1', port), Handler)
+
+
+
+def checked_directory(path):
+    path = Path(path).absolute()
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise ValueError('mailbox_symlink')
+    if not path.is_dir():
+        raise ValueError('mailbox_not_directory')
+    return path
+
+
+def closed_dispatch(trial, payload):
+    try:
+        response = trial.dispatch(json.loads(payload))
+        output = encoded(response)
+        if len(output) > MAX_RESPONSE:
+            raise ValueError('output_limit')
+        return output
+    except Exception as error:
+        allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
+                   'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
+        return encoded({'schema': SCHEMA, 'status': 'error',
+                        'reason': str(error) if str(error) in allowed else 'request_failed'})
+
+
+def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=86400):
+    """Cooperative file RPC, not authentication or protection from same-user writes.
+
+    Fresh owner-created directories; UUID names, no-follow bounded file reads,
+    atomic request/response publication. Request files are consumed; public audit
+    remains in trusted run root. A crash after dispatch can leave an uncertain
+    request: clients must not resubmit automatically.
+    """
+    mailbox = Path(mailbox).absolute()
+    for component in (mailbox, *mailbox.parents):
+        if component.is_symlink():
+            raise ValueError('mailbox_symlink')
+    mailbox.mkdir(parents=True, exist_ok=False)
+    requests, responses = mailbox / 'requests', mailbox / 'responses'
+    requests.mkdir(); responses.mkdir()
+    (mailbox / 'ready.json').write_bytes(encoded({'schema': SCHEMA, 'profile': 'cooperative-file-rpc'}))
+    print(json.dumps({'mailbox': str(mailbox), 'profile': 'cooperative-file-rpc'}), flush=True)
+    deadline = time.monotonic() + max_seconds
+    processed = 0
+    seen = set()
+    try:
+        while processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()):
+            # Revalidate fixed directories each iteration; never follow replacement links.
+            checked_directory(mailbox); checked_directory(requests); checked_directory(responses)
+            pending = sorted(requests.iterdir())
+            if len(pending) > 32:
+                trial.halted = True
+                raise ValueError('mailbox_queue_limit')
+            handled = False
+            for request in pending:
+                if not re.fullmatch(r'[0-9a-f]{32}\.json', request.name):
+                    continue
+                handled = True; processed += 1
+                if request.name in seen:
+                    request.unlink()
+                    if processed >= max_requests:
+                        break
+                    continue
+                seen.add(request.name)
+                response = encoded({'schema': SCHEMA, 'status': 'error', 'reason': 'invalid_request'})
+                try:
+                    fd = os.open(request, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                    with os.fdopen(fd, 'rb') as handle:
+                        metadata = os.fstat(handle.fileno())
+                        if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= MAX_REQUEST:
+                            raise ValueError('request_limit')
+                        payload = handle.read(MAX_REQUEST + 1)
+                    if len(payload) != metadata.st_size:
+                        raise ValueError('request_limit')
+                    response = closed_dispatch(trial, payload)
+                except (OSError, ValueError):
+                    pass
+                temporary = responses / (request.stem + '.tmp-' + uuid.uuid4().hex)
+                with temporary.open('xb') as handle:
+                    handle.write(response)
+                os.replace(temporary, responses / request.name)
+                request.unlink()
+                if processed >= max_requests:
+                    break
+            if not handled:
+                time.sleep(.05)
+    finally:
+        trial.halted = True
+        (mailbox / 'stopped.json').write_bytes(encoded({'schema': SCHEMA, 'processed': processed}))
+        trial.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', required=True, help='Trusted JSON configuration, never supplied by competitor')
+    parser.add_argument('--root', required=True)
+    parser.add_argument('--port', type=int, default=0)
+    parser.add_argument('--mailbox', help='Fresh shared directory for cooperative file RPC instead of HTTP')
+    args = parser.parse_args()
+    config = read_json(args.config)
+    worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90))
+    trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12))
+    if args.mailbox:
+        serve_mailbox(trial, args.mailbox)
+        return
+    server = make_server(trial, args.port)
+    print(json.dumps({'endpoint': 'http://127.0.0.1:' + str(server.server_port) + '/v1', 'profile': 'cooperative-public-development'}), flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        trial.close()
+
+
+if __name__ == '__main__':
+    main()
