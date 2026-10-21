@@ -34,7 +34,12 @@ in {
     mkdir -p "$out"
     cp -r node_modules .husky "$out/"
   '';
-  python-unit = pkgs.runCommand "bcenv-python-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+  python-unit = pkgs.runCommand "bcenv-python-unit" {
+    nativeBuildInputs = [ pkgs.python3 ];
+    BCENV_ENGINE_JAR = jar;
+    BCENV_JAVA = "${pkgs.jdk8}/bin/java";
+    BCENV_JAVAC = "${pkgs.jdk8}/bin/javac";
+  } ''
     cp -r ${src} source
     chmod -R u+w source
     cd source
