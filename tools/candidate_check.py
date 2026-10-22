@@ -129,7 +129,9 @@ def test(args):
     compile_step = execute([rt['BCENV_JAVAC'], '-source', '8', '-target', '8', '-encoding', 'UTF-8',
                             '-proc:none', '-classpath', cp, '-d', str(classes)] +
                            [str(out / 'test-source' / p) for p in before], out / 'compile.log', args.timeout)
-    result = {'schema': 'bcenv.candidate-check.v1', 'kind': 'java-test', 'status': 'failed',
+    result = {'schema': 'bcenv.candidate-check.v2', 'kind': 'java-test', 'status': 'failed',
+              'execution_status': 'not_run', 'assertions_enabled': True,
+              'assertion_coverage': 'unknown', 'correctness': 'not_established',
               'source_sha256': built['source_sha256'], 'binary_sha256': built['binary_sha256'],
               'engine_sha256': built['engine_sha256'], 'test_files': before, 'test_sha256': identity(before),
               'main_class': main_class, 'steps': [compile_step], 'semantics': 'uninstrumented-jvm'}
@@ -149,8 +151,9 @@ def test(args):
             run_step = execute([rt['BCENV_JAVA'], '-ea', '-cp', cp + os.pathsep + str(classes), main_class],
                                out / 'test.log', args.timeout)
             result['steps'].append(run_step)
+            result['execution_status'] = run_step['status']
             if run_step['status'] == 'succeeded':
-                result['status'] = 'passed'
+                result['status'] = 'execution_succeeded'
     # Detect accidental test mutation of its own snapshots; not hostile tamper proof.
     if (inventory(out / 'candidate-classes') != built['binary_files'] or
             inventory(out / 'test-source') != before or
@@ -161,7 +164,7 @@ def test(args):
     except (ValueError, OSError, KeyError):
         result.update(status='failed', reason='input_build_changed')
     write(out / 'check.json', result)
-    return result, 0 if result['status'] == 'passed' else 1
+    return result, 0 if result['status'] == 'execution_succeeded' else 1
 
 
 def main(argv=None, workspace=None):
