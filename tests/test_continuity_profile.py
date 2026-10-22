@@ -96,7 +96,7 @@ class ContinuityProfileTests(unittest.TestCase):
         self.assertEqual((t.max_submissions,t.max_notes,t.max_reads,t.max_replay_queries), (24,72,2000,450))
         self.assertTrue(t.require_experiment_notes)
         self.assertEqual(t.finalist.max_run_seconds, 21600)
-        self.assertEqual(t.finalist.deadline_monotonic - t.finalist.started_monotonic, 21600)
+        self.assertAlmostEqual(t.finalist.deadline_monotonic - t.finalist.started_monotonic, 21600, places=6)
         self.assertEqual(t.executor._max_workers, 1)
         state = t.finalist.state()
         self.assertEqual(state['game_budget'], 208)

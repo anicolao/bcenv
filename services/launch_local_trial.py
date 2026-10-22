@@ -15,6 +15,7 @@ import time
 
 from runtime.artifacts import digest, write
 from services import local_trial
+from services.operator_stop import validate_control_args, SCHEMA as STOP_SCHEMA, MAX_BYTES as STOP_MAX_BYTES, POLL_SECONDS, JOIN_SECONDS
 
 MAX_LOG = 65536
 
@@ -69,7 +70,7 @@ def probe(command, output, timeout=30):
     return result
 
 
-def launch_identity(config):
+def launch_identity(config, *, operator_stop=False):
     options = local_trial.trial_options(config)
     bounds = local_trial.resolve_profile(options['profile'], **{k: v for k, v in options.items() if k not in ('profile', 'validation_games')})
     repo = Path(__file__).resolve().parents[1]
@@ -89,6 +90,8 @@ def launch_identity(config):
         **({'resolved_profile': dict(bounds)} if bounds['profile'] == local_trial.CONTINUITY else {}),
         'validation_games': config.get('validation_games'),
         'max_run_seconds': bounds['max_run_seconds'],
+        **({'operator_stop': {'schema': STOP_SCHEMA, 'max_bytes': STOP_MAX_BYTES,
+            'poll_seconds': POLL_SECONDS, 'join_check_seconds': JOIN_SECONDS}} if operator_stop else {}),
     }
 
 
@@ -100,18 +103,24 @@ def main(argv=None):
     ap.add_argument('--evidence', required=True, help='Fresh operator-only directory')
     ap.add_argument('--expect-parity', help='Successful integration launch.json')
     ap.add_argument('--check-only', action='store_true')
+    ap.add_argument('--operator-control', help='Fresh private operator directory, outside candidate mailbox/artifacts')
+    ap.add_argument('--run-id', help='32 lowercase hex run UUID paired with --operator-control')
     args = ap.parse_args(argv)
+    control = validate_control_args(args.operator_control, args.run_id)
     config = local_trial.read_json(args.config)
     worker = local_trial.AdapterWorker(config['command'],
         [local_trial.DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90),
         match_timeout=config.get('match_timeout', local_trial.DEFAULT_MATCH_TIMEOUT))
-    identity = launch_identity(config)
+    identity = launch_identity(config, operator_stop=control is not None)
     evidence = Path(args.evidence).resolve()
     evidence.mkdir(parents=True, exist_ok=False)
     record = {'schema': 'bcenv.operator-launch.v1', 'identity': identity,
               'config': config, 'config_sha256': digest(args.config),
               'check_only': args.check_only, 'status': 'parity_failed',
               'limitation': 'Probe does not establish end-to-end integration, confinement or performance.'}
+    if control is not None:
+        record['operator_control'] = {'directory': str(control[0]), 'run_id': control[1],
+            'parity_exclusion': 'Run-specific path and UUID differ intentionally; mode/schema/limits remain bound.'}
     if args.expect_parity:
         prior = local_trial.read_json(args.expect_parity)
         if prior.get('status') != 'probe_passed' or prior.get('identity') != identity:
@@ -128,7 +137,7 @@ def main(argv=None):
     # re-read a config or start a different Nix/python wrapper after probing.
     trial = local_trial.LocalTrial(args.root, worker, **local_trial.trial_options(config))
     with local_trial.cooperative_signals(trial):
-        local_trial.serve_mailbox(trial, args.mailbox)
+        local_trial.run_mailbox(trial, args.mailbox, operator_control=args.operator_control, run_id=args.run_id)
     return 0
 
 
