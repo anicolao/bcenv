@@ -68,7 +68,8 @@ class FinalistValidation:
         if ({x[0] for x in training} != {x[0] for x in validation} or
                 {x[1] for x in training} & {x[1] for x in validation}):
             raise ValueError('invalid_validation_config')
-        self.worker = AdapterWorker(trial.worker.command, games, trial.worker.timeout, trial.worker.spec_version)
+        self.worker = AdapterWorker(trial.worker.command, games, trial.worker.timeout, trial.worker.spec_version,
+                                    match_timeout=trial.worker.match_timeout)
         self.phase, self.finalists, self.validation_ids = 'training', [], {}
         self.provisional_choice = self.final_choice = None
         self.identities = {}

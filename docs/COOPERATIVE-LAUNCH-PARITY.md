@@ -18,7 +18,7 @@ workspace. Same-user hostile descendants and host file access are not contained.
 
 For live launch add `--expect-parity INTEGRATION_EVIDENCE/launch.json`. The launcher
 checks its own code, service/runtime Python code, outer interpreter path/hash,
-working directory, fixed worker command and executable hash, schedule, timeout,
+working directory, fixed worker command and executable hash, schedule, timeout, resolved match_timeout,
 and notes mode. Run paths and quotas may differ; full configs are recorded so
 those differences can be reviewed. These are provenance/drift checks, not hostile
 tamper protection or a transitive closure signature. The ambient environment is

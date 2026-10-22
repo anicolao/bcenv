@@ -82,6 +82,7 @@ def launch_identity(config):
                          for p in sorted((repo / name).rglob('*.py'))},
         'worker_command': config['command'], 'worker_executable_sha256': digest(executable),
         'games': config['games'], 'timeout': config.get('timeout', 90),
+        'match_timeout': config.get('match_timeout', config.get('timeout', 90)),
         'require_experiment_notes': config.get('require_experiment_notes', False),
         'validation_games': config.get('validation_games'),
         'max_run_seconds': config.get('max_run_seconds', 2700),
@@ -99,7 +100,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     config = local_trial.read_json(args.config)
     worker = local_trial.AdapterWorker(config['command'],
-        [local_trial.DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90))
+        [local_trial.DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90),
+        match_timeout=config.get('match_timeout', local_trial.DEFAULT_MATCH_TIMEOUT))
     identity = launch_identity(config)
     evidence = Path(args.evidence).resolve()
     evidence.mkdir(parents=True, exist_ok=False)

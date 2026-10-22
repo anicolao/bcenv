@@ -59,19 +59,28 @@ class DevelopmentGame:
             raise ValueError('invalid_game')
 
 
+DEFAULT_MATCH_TIMEOUT = object()
+
+
 class AdapterWorker:
     """Trusted fixed executable + fixed development schedule; no client paths."""
-    def __init__(self, command, games, timeout=90, spec_version='3.0.13'):
+    def __init__(self, command, games, timeout=90, spec_version='3.0.13', *,
+                 match_timeout=DEFAULT_MATCH_TIMEOUT):
+        if match_timeout is DEFAULT_MATCH_TIMEOUT:
+            match_timeout = timeout
         if (not command or not all(type(x) is str for x in command) or
                 not 1 <= len(games) <= 8 or type(timeout) is not int or not 1 <= timeout <= 120 or
-                spec_version != '3.0.13'):
+                spec_version != '3.0.13' or type(match_timeout) is not int or
+                not 1 <= match_timeout <= 300):
             raise ValueError('invalid_worker_config')
         self.command, self.games, self.timeout, self.spec_version = list(command), tuple(games), timeout, spec_version
+        self.match_timeout = match_timeout
 
     def invoke(self, root, name, arguments, multiplier=1):
         # Adapter subcommands have their own per-process wall timeouts. Outer
         # limit covers its bounded sequential processes, not aggregate resources.
-        outer_timeout = self.timeout * multiplier + 15
+        timeout = self.match_timeout if arguments and arguments[0] == 'run' else self.timeout
+        outer_timeout = timeout * multiplier + 15
         if getattr(self, 'remaining_seconds', None):
             remaining = self.remaining_seconds()
             if remaining <= 0:
@@ -80,7 +89,7 @@ class AdapterWorker:
             # child. Do not kill it first: allow bounded child-reaping/log grace.
             outer_timeout = remaining + 5
             arguments = arguments + ['--deadline-monotonic', str(self.deadline_monotonic)]
-        result = execute(self.command + arguments + ['--timeout', str(self.timeout)],
+        result = execute(self.command + arguments + ['--timeout', str(timeout)],
                          root / (name + '.log'), outer_timeout)
         return result['exit_code'] == 0
 
@@ -590,7 +599,8 @@ def main():
     parser.add_argument('--mailbox', help='Fresh shared directory for cooperative file RPC instead of HTTP')
     args = parser.parse_args()
     config = read_json(args.config)
-    worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90))
+    worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90),
+                           match_timeout=config.get('match_timeout', DEFAULT_MATCH_TIMEOUT))
     trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12),
                        require_experiment_notes=config.get('require_experiment_notes', False),
                        max_notes=config.get('max_notes', 24),
