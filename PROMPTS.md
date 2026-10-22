@@ -1143,3 +1143,11 @@ Source: user message Sentinel_7394f361f4e881919d712f2e0bda2fd6, 2026-10-21 13:07
 ```text
 Ok let's proceed.
 ```
+
+## Prompt repetition: Public finalist validation
+
+Source: user message Sentinel_7394f361f4e881919d712f2e0bda2fd6, 2026-10-21 13:07:26 UTC. Repeated verbatim for this incremental commit under the previously recorded autonomous competitive-environment mandate. The paired public validation phase and bounded service/runtime deadline are agent implementation decisions, not new user wording. No candidate strategy changes, held-out material, games, or merge authorization are included in this implementation commit.
+
+```text
+Ok let's proceed.
+```

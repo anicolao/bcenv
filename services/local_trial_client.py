@@ -89,11 +89,21 @@ def main():
     replay = subs.add_parser('replay'); replay.add_argument('--submission', required=True); replay.add_argument('--game', type=int, required=True)
     replay.add_argument('--start', type=int, required=True); replay.add_argument('--end', type=int, required=True)
     replay.add_argument('--robot', type=int); replay.add_argument('--offset', type=int, default=0); replay.add_argument('--limit', type=int, default=64)
+    finalists = subs.add_parser('lock-finalists', help='Atomically lock two completed training submissions before validation')
+    finalists.add_argument('--submission', action='append', required=True,
+                           help='Original training submission ID; supply exactly twice')
+    finalists.add_argument('--provisional-choice', required=True,
+                           help='One of the two original training submission IDs')
+    subs.add_parser('validation-status', help='Read phase, locked IDs and game accounting')
+    selection = subs.add_parser('select-finalist', help='Record final choice after both validations complete')
+    selection.add_argument('--submission', required=True, help='Original training finalist ID, not validation ID')
     args = parser.parse_args()
     endpoint = urllib.parse.urlsplit(args.endpoint or '')
     if args.endpoint and (endpoint.scheme != 'http' or endpoint.hostname != '127.0.0.1' or endpoint.path != '/v1' or endpoint.query or endpoint.fragment or endpoint.username or endpoint.password):
         parser.error('Use the provided 127.0.0.1 /v1 endpoint')
-    body = {'operation': args.operation}
+    operation = {'lock-finalists': 'lock_finalists', 'validation-status': 'validation_status',
+                 'select-finalist': 'select_finalist'}.get(args.operation, args.operation)
+    body = {'operation': operation}
     if args.operation in ('submit', 'note'):
         body.update(package=args.package, source_zip_base64=base64.b64encode(source_zip(args.source,args.package)).decode())
         if args.operation == 'note':
@@ -106,7 +116,13 @@ def main():
             if args.note_id is None or args.note_sha256 is None:
                 parser.error('Provide both --note-id and --note-sha256')
             body.update(note_id=args.note_id, note_sha256=args.note_sha256)
-    else:
+    elif args.operation == 'lock-finalists':
+        if len(args.submission) != 2 or len(set(args.submission)) != 2:
+            parser.error('Provide exactly two distinct --submission IDs')
+        if args.provisional_choice not in args.submission:
+            parser.error('--provisional-choice must be one of the two submissions')
+        body.update(submission_ids=args.submission, provisional_choice=args.provisional_choice)
+    elif args.operation != 'validation-status':
         body['submission_id'] = args.submission
         if args.operation == 'replay':
             body.update(game_index=args.game, query={'round_start':args.start,'round_end':args.end,'robot_id':args.robot,'record_offset':args.offset,'record_limit':args.limit})
