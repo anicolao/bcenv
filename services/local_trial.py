@@ -24,6 +24,7 @@ import uuid
 
 from runtime.artifacts import execute, digest
 from runtime.cancellation import Cancellation, cancelled
+from services.operator_stop import OperatorStop, validate_control_args
 from services.public_finalist import FinalistValidation, FINALIST_ERRORS
 from services.trial_profiles import UNSET, CONTINUITY, resolve_profile, trial_options
 from services.storage_guard import StorageGuard
@@ -84,7 +85,8 @@ class AdapterWorker:
     def invoke(self, root, name, arguments, multiplier=1):
         checkpoint = getattr(self, 'storage_checkpoint', lambda stage: None)
         token = getattr(self, 'cancellation', None)
-        if token is not None and cancelled(token.read_fd):
+        if (getattr(self, 'stop_requested', None) is not None and self.stop_requested.is_set() or
+                token is not None and cancelled(token.read_fd)):
             raise ValueError('run_halted')
         checkpoint('adapter_before')
         # Adapter subcommands have their own per-process wall timeouts. Outer
@@ -103,6 +105,11 @@ class AdapterWorker:
         if token is not None:
             arguments = arguments + ['--cancel-fd', str(token.read_fd), '--cleanup-ack', str(ack)]
         ownership = {}
+        # Recheck after storage/deadline preparation. This is cooperative admission,
+        # not an atomic precheck/spawn guarantee; execute also observes token EOF.
+        if (getattr(self, 'stop_requested', None) is not None and self.stop_requested.is_set() or
+                token is not None and cancelled(token.read_fd)):
+            raise ValueError('run_halted')
         try:
             result = execute(self.command + arguments + ['--timeout', str(timeout)],
                              root / (name + '.log'), outer_timeout,
@@ -253,11 +260,14 @@ class LocalTrial:
         self.storage_guard = StorageGuard(self.root) if self.profile == CONTINUITY else None
         self.worker.storage_checkpoint = self.storage_checkpoint
         self.finalist = FinalistValidation(self, validation_games, self.profile_bounds['max_run_seconds']) if validation_games is not None else None
+        self.stop_requested = threading.Event()
         self.cancellation = Cancellation()
+        self.worker.stop_requested = self.stop_requested
         self.worker.cancellation = self.cancellation
         self.worker.cancel_trial = self.cancel
         self.worker.cleanup_unverified = False
         if self.finalist:
+            self.finalist.worker.stop_requested = self.stop_requested
             self.finalist.worker.cancellation = self.cancellation
             self.finalist.worker.cancel_trial = self.cancel
             self.finalist.worker.cleanup_unverified = False
@@ -406,7 +416,11 @@ class LocalTrial:
                                      'status': 'infrastructure_failure', 'reason': 'persistence_failure', **binding}
 
     def dispatch(self, request):
+        if self.stop_requested.is_set():
+            raise ValueError('invalid_request')
         with self.lock:
+            if self.stop_requested.is_set():
+                raise ValueError('invalid_request')
             if self.profile == CONTINUITY:
                 self.requests += 1
                 if self.requests > self.max_mailbox_requests:
@@ -430,8 +444,10 @@ class LocalTrial:
             return response
 
     def _dispatch(self, request):
+        if self.stop_requested.is_set():
+            raise ValueError('invalid_request')
         with self.lock:
-            if self.closed or type(request) is not dict:
+            if self.stop_requested.is_set() or self.closed or type(request) is not dict:
                 raise ValueError('invalid_request')
             op = request.get('operation')
             if self.finalist and self.finalist.remaining_seconds() <= 0:
@@ -559,11 +575,18 @@ class LocalTrial:
                 return result
             raise ValueError('invalid_request')
 
+    def request_cancel(self):
+        # The watcher must never wait for the synchronous dispatch RLock. Fence
+        # admission first, then publish EOF through the separate short token lock.
+        self.stop_requested.set()
+        self.cancellation.cancel()
+
     def cancel(self):
-        # Same lock as dispatch admission: fence before signaling the trusted chain.
-        with self.lock:
-            self.closed = self.halted = True
-            self.cancellation.cancel()
+        try:
+            self.request_cancel()
+        finally:
+            with self.lock:
+                self.closed = self.halted = True
 
     def close(self):
         with self.close_lock:
@@ -650,7 +673,7 @@ def closed_dispatch(trial, payload):
                         'reason': str(error) if str(error) in allowed | NOTE_ERRORS | FINALIST_ERRORS else 'request_failed'})
 
 
-def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=86400):
+def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=86400, operator_stop=None):
     """Cooperative file RPC, not authentication or protection from same-user writes.
 
     Fresh owner-created directories; UUID names, no-follow bounded file reads,
@@ -686,7 +709,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
     processed = 0
     seen = set()
     try:
-        while (not trial.closed and processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
+        while (not trial.stop_requested.is_set() and not trial.closed and processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
                (trial.profile != CONTINUITY or not trial.halted) and
                (trial.finalist is None or trial.finalist.remaining_seconds() > 0)):
             # Revalidate fixed directories each iteration; never follow replacement links.
@@ -697,6 +720,8 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
                 raise ValueError('mailbox_queue_limit')
             handled = False
             for request in pending:
+                if trial.stop_requested.is_set():
+                    break
                 if trial.profile == CONTINUITY and re.fullmatch(r'[0-9a-f]{32}\.tmp', request.name):
                     # The unchanged client publishes by atomic tmp -> json rename.
                     # Staging is not a request attempt and must never be consumed.
@@ -750,7 +775,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
             if not handled:
                 time.sleep(.05)
     finally:
-        finish_mailbox(trial, mailbox, processed)
+        finish_mailbox(trial, mailbox, processed, operator_stop=operator_stop)
 
 
 @contextmanager
@@ -766,13 +791,21 @@ def cooperative_signals(trial):
             signal.signal(signum, handler)
 
 
-def finish_mailbox(trial, mailbox, processed):
+def finish_mailbox(trial, mailbox, processed, *, operator_stop=None):
     """Publish only after voluntary cleanup; disk failure never bypasses close."""
-    trial.close()
+    if operator_stop is not None:
+        try:
+            operator_stop.stop_and_join()
+        finally:
+            trial.close()
+        operator_stop.raise_if_failed()
+    else:
+        trial.close()
     # Not a certificate of global absence or supervisor-death containment.
     receipt = encoded({'schema': SCHEMA, 'processed': processed,
         'cleanup_scope': 'cooperative workers joined; normal adapter direct-child waits acknowledged',
         'supervisor_death_containment': False,
+        **({'operator_stop': operator_stop.snapshot()} if operator_stop is not None else {}),
         **({'dispatch_attempts': trial.requests, 'usage': trial.usage_snapshot()}
            if trial.profile == CONTINUITY else {})})
     if len(receipt) > 4096:
@@ -787,13 +820,37 @@ def finish_mailbox(trial, mailbox, processed):
         temporary.unlink(missing_ok=True)
 
 
+
+def run_mailbox(trial, mailbox, *, operator_control=None, run_id=None):
+    """Opt-in operator watcher, with main-owner cleanup even before readiness."""
+    if operator_control is None and run_id is None:
+        return serve_mailbox(trial, mailbox)
+    watcher = None
+    try:
+        selected = validate_control_args(operator_control, run_id)
+        watcher = OperatorStop(trial, *selected, forbidden_roots=(trial.root, mailbox))
+        watcher.start()
+        return serve_mailbox(trial, mailbox, operator_stop=watcher)
+    finally:
+        try:
+            if watcher is not None:
+                watcher.stop_and_join()
+        finally:
+            trial.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True, help='Trusted JSON configuration, never supplied by competitor')
     parser.add_argument('--root', required=True)
     parser.add_argument('--port', type=int, default=0)
     parser.add_argument('--mailbox', help='Fresh shared directory for cooperative file RPC instead of HTTP')
+    parser.add_argument('--operator-control', help='Fresh private operator directory; not a candidate API')
+    parser.add_argument('--run-id', help='Operator-only 32 lowercase hex run UUID; paired with --operator-control')
     args = parser.parse_args()
+    validate_control_args(args.operator_control, args.run_id)
+    if args.operator_control is not None and not args.mailbox:
+        raise ValueError('operator_control_requires_mailbox')
     config = read_json(args.config)
     worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90),
                            match_timeout=config.get('match_timeout', DEFAULT_MATCH_TIMEOUT))
@@ -803,7 +860,7 @@ def main():
     trial = LocalTrial(args.root, worker, **options)
     if args.mailbox:
         with cooperative_signals(trial):
-            serve_mailbox(trial, args.mailbox)
+            run_mailbox(trial, args.mailbox, operator_control=args.operator_control, run_id=args.run_id)
         return
     server = make_server(trial, args.port)
     print(json.dumps({'endpoint': 'http://127.0.0.1:' + str(server.server_port) + '/v1', 'profile': 'cooperative-public-development'}), flush=True)

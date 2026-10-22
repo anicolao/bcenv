@@ -42,6 +42,7 @@ class CooperativeCancelTests(unittest.TestCase):
         t = object.__new__(LocalTrial)
         t.lock = threading.RLock(); t.close_lock = threading.Lock()
         t.closed = t.halted = t.cleanup_complete = False
+        t.stop_requested = threading.Event()
         t.cancellation = Cancellation(); self.addCleanup(t.cancellation.close)
         t.executor = Mock(); t.worker = Mock(cleanup_unverified=False)
         t.finalist = None; t.profile = 'legacy'
@@ -130,7 +131,7 @@ class CooperativeCancelTests(unittest.TestCase):
         t = self.trial(); events = []
         original = t.cancellation.cancel
         def cancel():
-            self.assertTrue(t.closed and t.halted); events.append('cancel'); original()
+            self.assertTrue(t.stop_requested.is_set()); events.append('cancel'); original()
         with patch.object(t.cancellation, 'cancel', side_effect=cancel):
             t.executor.shutdown.side_effect = lambda **kw: events.append('join')
             t.close()
