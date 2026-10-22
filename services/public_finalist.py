@@ -47,14 +47,15 @@ class FinalistValidation:
     def __init__(self, trial, validation_games, max_run_seconds=2700):
         from services.local_trial import AdapterWorker, DevelopmentGame
         self.trial = trial
-        if type(max_run_seconds) is not int or not 1 <= max_run_seconds <= 2700:
+        continuity = trial.profile == 'continuity-v1'
+        if type(max_run_seconds) is not int or not 1 <= max_run_seconds <= (21600 if continuity else 2700):
             raise ValueError('invalid_deadline_config')
         self.max_run_seconds = max_run_seconds
         self.started_unix = time.time()
         self.started_monotonic = time.monotonic()
         self.deadline_monotonic = self.started_monotonic + max_run_seconds
         games = tuple(DevelopmentGame(**g) for g in validation_games)
-        if (type(trial.max_submissions) is not int or trial.max_submissions != 8 or
+        if (type(trial.max_submissions) is not int or trial.max_submissions != (24 if continuity else 8) or
                 len(trial.worker.games) != 8 or len(games) != 8):
             raise ValueError('invalid_validation_config')
         # Both phases have two opponents/maps in both slots, with no duplicate cell.
@@ -78,6 +79,7 @@ class FinalistValidation:
         self.schedule_identity = self._schedule_identity()
         trial.worker.before_game = self.before_game
         self.worker.before_game = self.before_game
+        self.worker.storage_checkpoint = trial.storage_checkpoint
         trial.worker.remaining_seconds = self.execution_budget
         self.worker.remaining_seconds = self.execution_budget
         trial.worker.deadline_monotonic = self.deadline_monotonic
@@ -105,7 +107,9 @@ class FinalistValidation:
                 'provisional_choice': self.provisional_choice, 'final_choice': self.final_choice,
                 'locked_monotonic': self.locked_monotonic, 'selected_monotonic': self.selected_monotonic,
                 'halted': self.trial.halted,
-                'game_budget': 80, 'max_run_seconds': self.max_run_seconds,
+                'game_budget': self.trial.profile_bounds['total_game_budget'],
+                **({'resolved_profile': dict(self.trial.profile_bounds), 'usage': self.trial.usage_snapshot()}
+                   if self.trial.profile == 'continuity-v1' else {}), 'max_run_seconds': self.max_run_seconds,
                 'started_unix': self.started_unix,
                 'deadline_unix': self.started_unix + self.max_run_seconds,
                 'started_monotonic': self.started_monotonic,
@@ -146,9 +150,10 @@ class FinalistValidation:
                 raise ValueError('game_limit')
             validation = sid in self.validation_ids.values()
             phase = 'validation' if validation else 'training'
-            limit = 16 if validation else 64
+            self.trial.storage_checkpoint('game_before')
+            limit = self.trial.profile_bounds['validation_game_budget' if validation else 'training_game_budget']
             if (len([a for a in self.attempts if a['phase'] == phase]) >= limit or
-                    len(self.attempts) >= 80 or any(a['submission_id'] == sid and a['index'] == index for a in self.attempts)):
+                    len(self.attempts) >= self.trial.profile_bounds['total_game_budget'] or any(a['submission_id'] == sid and a['index'] == index for a in self.attempts)):
                 raise ValueError('game_limit')
             if self._schedule_identity() != self.schedule_identity:
                 self.trial.halted = True
@@ -192,6 +197,7 @@ class FinalistValidation:
             if set(request) != {'operation', 'submission_id'} or request['submission_id'] not in self.finalists:
                 raise ValueError('invalid_finalists')
             self.verify_finalists()
+            t.storage_checkpoint('selection_authorization')
             decision_time = time.monotonic()
             if t.closed or t.halted or decision_time >= self.deadline_monotonic:
                 t.halted = True
@@ -227,6 +233,7 @@ class FinalistValidation:
         except Exception:
             t.halted = True
             raise ValueError('run_halted') from None
+        t.storage_checkpoint('lock_authorization')
         decision_time = time.monotonic()
         if t.closed or t.halted or decision_time >= self.deadline_monotonic:
             t.halted = True
@@ -296,12 +303,19 @@ class FinalistValidation:
                     if t.halted or t.closed or self.remaining_seconds() <= 0:
                         raise ValueError('run_halted')
                     self.verify_finalists()
-                root.mkdir()
-                for name in ('source', 'build', 'package'):
-                    shutil.copytree(t.root / sid / name, root / name)
+                t.storage_checkpoint('validation_copy_before')
+                try:
+                    root.mkdir()
+                    for name in ('source', 'build', 'package'):
+                        shutil.copytree(t.root / sid / name, root / name)
+                finally:
+                    t.storage_checkpoint('validation_copy_after')
                 if build_identity(root, self.identities[sid]['source_sha256']) != self.identities[sid]:
                     raise ValueError('snapshot_changed')
-                result = self.worker.run_games(root)
+                try:
+                    result = self.worker.run_games(root)
+                finally:
+                    t.storage_checkpoint('validation_after')
                 charged = [a['index'] for a in self.attempts if a['submission_id'] == vid]
                 if (sorted(charged) != list(range(8)) or t.halted or t.closed or self.remaining_seconds() <= 0 or
                         result.get('status') != 'complete' or len(result.get('games', [])) != 8 or
