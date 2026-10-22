@@ -80,6 +80,16 @@ print('Packaged replay query integration: PASS')
 # The source fixture is separate from the real packaged CLI used by case1.
 import os
 import sys
-sys.path.insert(0, os.environ['BCENV_QUALIFICATION_SOURCE'])
-from tests.cooperative_runtime_qualification import run_remote
-run_remote('cooperative-qualification', 'synthetic.bc23')
+qualification_mode = os.environ['BCENV_REMOTE_COOPERATIVE_QUALIFICATION']
+if qualification_mode not in ('0', '1'):
+    raise ValueError('invalid cooperative qualification selector')
+Path('qualification-selection.json').write_text(json.dumps({
+    'schema': 'bcenv.cooperative-qualification-selection.v1',
+    'selected': qualification_mode == '1',
+    'status': 'selected' if qualification_mode == '1' else 'not_selected'}, sort_keys=True) + '\n')
+if qualification_mode == '1':
+    sys.path.insert(0, os.environ['BCENV_QUALIFICATION_SOURCE'])
+    from tests.cooperative_runtime_qualification import run_remote
+    run_remote('cooperative-qualification', 'synthetic.bc23')
+elif qualification_mode == '0':
+    print('COOPERATIVE_QUALIFICATION_NOT_SELECTED: default-off check instance; no lifecycle cases')

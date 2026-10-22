@@ -1,5 +1,6 @@
 """Pure prospective contract checks; never execute the remote lifecycle harness."""
 import ast
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -52,13 +53,45 @@ class QualificationContractTests(unittest.TestCase):
         entry = (root / 'nix/verify-replay-query.py').read_text()
         self.assertEqual(entry.count("run_remote('cooperative-qualification', 'synthetic.bc23')"), 1)
         nix = (root / 'nix/checks.nix').read_text()
-        self.assertEqual(nix.count('BCENV_REMOTE_COOPERATIVE_QUALIFICATION = "1"'), 1)
+        self.assertIn('cooperativeQualification ? false', nix)
+        self.assertEqual(nix.count('BCENV_REMOTE_COOPERATIVE_QUALIFICATION = if cooperativeQualification then "1" else "0";'), 1)
+        self.assertIn('if [ "$BCENV_REMOTE_COOPERATIVE_QUALIFICATION" = "1" ]; then', nix)
+        flake = (root / 'flake.nix').read_text()
+        self.assertEqual(flake.count('cooperativeQualification = true;'), 1)
+        diagnostic, active = flake.split('diagnosticChecks = import ./nix/checks.nix', 1)[1].split('activeChecks = import ./nix/checks.nix', 1)
+        self.assertIn('cooperativeQualification = false;', diagnostic)
+        self.assertIn('cooperativeQualification = true;', active.split('in activeChecks', 1)[0])
+        workflow = (root / '.github/workflows/bc23.yml').read_text()
+        self.assertIn('nix eval --raw .#checks.x86_64-linux.replay-query.outPath', workflow)
+        self.assertNotIn('nix build .#checks.x86_64-linux.replay-query', workflow)
+        self.assertNotIn('--all-systems', workflow)
+        self.assertNotIn('matrix:', workflow)
         self.assertIn('BCENV_QUALIFICATION_SOURCE = src;', nix)
         # New harness has no direct match/engine command or process enumeration.
         tree = ast.parse((root / 'tests/cooperative_runtime_qualification.py').read_text())
         called = [n.func.attr for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
         self.assertNotIn('system', called)
         self.assertNotIn('fork', called)
+
+    def test_disabled_instance_never_imports_or_calls_harness(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / 'nix/verify-replay-query.py').read_text().split('# Five ordered inert cancellation cases,', 1)[1]
+        source = source[source.index('import os'):]
+        with patch.dict(os.environ, {'BCENV_REMOTE_COOPERATIVE_QUALIFICATION': '0'}), \
+                patch.object(q, 'run_remote', side_effect=AssertionError('must not qualify')) as run, \
+                patch('subprocess.Popen', side_effect=AssertionError('spawn prohibited')):
+            with tempfile.TemporaryDirectory() as d:
+                old_cwd = os.getcwd()
+                try:
+                    os.chdir(d)
+                    exec(compile(source, '<disabled-instance>', 'exec'), {'Path': Path, 'json': json})
+                    self.assertEqual(json.loads(Path('qualification-selection.json').read_text())['status'], 'not_selected')
+                finally:
+                    os.chdir(old_cwd)
+            run.assert_not_called()
+        with patch.dict(os.environ, {'BCENV_REMOTE_COOPERATIVE_QUALIFICATION': 'bad'}):
+            with self.assertRaisesRegex(ValueError, 'invalid cooperative'):
+                exec(compile(source, '<invalid-selector>', 'exec'), {})
 
     def test_first_failure_stops_later_cases_pure_mock(self):
         with tempfile.TemporaryDirectory() as d, patch.dict(os.environ, {'BCENV_REMOTE_COOPERATIVE_QUALIFICATION': '1'}), \

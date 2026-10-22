@@ -53,8 +53,12 @@
           diagnosticChecks = import ./nix/checks.nix {
             inherit (p) pkgs; inherit galaxy;
             engine = p.diagnosticEngine; bcenv = p.diagnosticBcenv;
+            cooperativeQualification = false;
           };
-          activeChecks = import ./nix/checks.nix { inherit (p) pkgs engine bcenv; inherit galaxy; };
+          activeChecks = import ./nix/checks.nix {
+            inherit (p) pkgs engine bcenv; inherit galaxy;
+            cooperativeQualification = true;
+          };
         in activeChecks // {
           diagnostic-engine-api = diagnosticChecks.engine-api;
           diagnostic-replay-parser = diagnosticChecks.replay-parser;

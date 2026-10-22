@@ -101,3 +101,36 @@ old frozen exports are not modified. Local validation of this follow-up is
 restricted to these guarded pure tests and static inspection. The fixture enable
 flag is an explicit check opt-in, not an authentication of runner location. The five real
 lifecycle cases are not executed locally while012 helper quiescence is unknown.
+
+### Recorded duplicate deviation and corrected prospective scope
+
+The first remote qualification attempt, commit cccec35 and CI39853320731,
+passed both sets of checks but instantiated the harness twice: active and
+legacy diagnostic replay-query each ran five cases. Actual totals were ten
+cases, six wrapper controls, two synthetic-query JVMs, eight source adapters
+and eight inner helpers. This exceeded the prospective single-sequence ceiling;
+there was no global fail-stop ordering across both derivations. Both original
+records and their limits remain preserved. A green workflow did not erase this
+deviation or qualify a VM trial.
+
+The correction is explicit and default-off: checks.nix accepts
+cooperativeQualification=false by default; flake.nix passes true only to
+activeChecks and explicit false to diagnosticChecks. The same flag controls
+verifier entry and artifact copying. Disabled instances retain all old checks
+and emit not_selected, never pass/qualified lifecycle evidence. The existing
+single Ubuntu job invokes current-system flake check without a matrix or
+--all-systems; there are no additional jobs, check resources or matches.
+
+One corrected remote attempt is prospectively authorized, with exactly one
+active five-case sequence and no retry. The six existing standard public
+fixture matches are unchanged and separate. Local validation remains pure or
+mocked. The existing identity step uses nix eval outPath (never build) to read
+already-produced active and diagnostic outputs; diagnostic must have no
+qualification directory and must report not_selected. Missing, duplicate,
+wrong-runtime, source-hash or incomplete evidence fails publication. A single
+exclusive-write qualification-identity.json binds the retained sequence,
+source/fixture/installed hashes, runtime metadata, tested revision/tree and
+exact PR head/tree, and explicitly records the earlier duplicate deviation.
+A shallow checkout may fetch the validated exact40hex PR head once, read-only
+and bounded, to compare its tree with the tested merge tree. No equality is
+silently inferred, and no qualification is re-executed to collect evidence.

@@ -1,4 +1,4 @@
-{ pkgs, engine, bcenv, galaxy }:
+{ pkgs, engine, bcenv, galaxy, cooperativeQualification ? false }:
 let
   src = pkgs.lib.cleanSource ../.;
   jar = "${engine}/share/battlecode23/engine.jar";
@@ -62,14 +62,17 @@ in {
   replay-query = pkgs.runCommand "bcenv-replay-query" {
     nativeBuildInputs = [ pkgs.jdk8 bcenv pkgs.python3 ];
     BCENV_QUALIFICATION_SOURCE = src;
-    BCENV_REMOTE_COOPERATIVE_QUALIFICATION = "1";
+    BCENV_REMOTE_COOPERATIVE_QUALIFICATION = if cooperativeQualification then "1" else "0";
   } ''
     mkdir classes
     javac -source 8 -target 8 -cp ${jar} -d classes ${src}/seasons/2023/replay/*.java
     java -cp classes:${jar} ReplayQueryTest --write-fixture synthetic.bc23
     python ${./verify-replay-query.py}
     mkdir -p "$out"
-    cp -r query-integration-evidence.json synthetic.bc23 capped complete late empty broken truncated cooperative-qualification "$out/"
+    cp -r qualification-selection.json query-integration-evidence.json synthetic.bc23 capped complete late empty broken truncated "$out/"
+    if [ "$BCENV_REMOTE_COOPERATIVE_QUALIFICATION" = "1" ]; then
+      cp -r cooperative-qualification "$out/"
+    fi
   '';
   fixture-game = pkgs.runCommand "bcenv-fixture-game" { nativeBuildInputs = [ bcenv pkgs.python3 ]; } ''
     export HOME="$TMPDIR"
