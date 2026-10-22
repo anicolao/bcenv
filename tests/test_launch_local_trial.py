@@ -76,3 +76,17 @@ class LaunchTests(unittest.TestCase):
         result = launch.probe(['/nonexistent/bcenv'], self.root / 'log')
         self.assertEqual(result['status'], 'failed')
         self.assertIn('launch_error', result)
+
+    def test_deadline_duration_change_fails_parity(self):
+        self.assertEqual(launch.main(self.args('a') + ['--check-only']), 0)
+        self.config['max_run_seconds'] = 1200
+        with patch.object(launch, 'probe') as probe:
+            self.assertEqual(launch.main(self.args('b') + ['--expect-parity', str(self.root / 'a/launch.json')]), 1)
+            probe.assert_not_called()
+
+    def test_public_validation_schedule_change_fails_parity(self):
+        self.assertEqual(launch.main(self.args('a') + ['--check-only']), 0)
+        self.config['validation_games'] = self.config['games']
+        with patch.object(launch, 'probe') as probe:
+            self.assertEqual(launch.main(self.args('b') + ['--expect-parity', str(self.root / 'a/launch.json')]), 1)
+            probe.assert_not_called()

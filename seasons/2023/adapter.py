@@ -2,6 +2,7 @@
 """Versioned, offline BC23 builder tools. Not a sandbox for hostile bot sources."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -27,6 +28,13 @@ def runtime():
         if not Path(path).is_file():
             raise ValueError('Runtime file missing: ' + path)
     return values
+
+
+def deadline_options(args):
+    # Preserve the no-deadline execute call contract, including exported helpers
+    # that wrap the legacy function without accepting additional keywords.
+    deadline = getattr(args, 'deadline_monotonic', None)
+    return {} if deadline is None else {'deadline_monotonic': deadline}
 
 
 def build(args):
@@ -55,10 +63,10 @@ def build(args):
              '-proc:none', '-classpath', rt['BCENV_ENGINE_JAR'], '-d', str(classes)]
     # Source paths are absolute, so filenames cannot inject javac flags.
     javac += [str(out / 'source' / p) for p in before]
-    data['steps'].append(execute(javac, out / 'compile.log', args.timeout))
+    data['steps'].append(execute(javac, out / 'compile.log', args.timeout, **deadline_options(args)))
     if data['steps'][-1]['status'] == 'succeeded':
         data['steps'].append(execute([rt['BCENV_JAVA'], '-cp', rt['BCENV_ENGINE_JAR'],
-            'battlecode.instrumenter.Verifier', package, str(classes)], out / 'verify.log', args.timeout))
+            'battlecode.instrumenter.Verifier', package, str(classes)], out / 'verify.log', args.timeout, **deadline_options(args)))
         if data['steps'][-1]['status'] == 'succeeded':
             data['status'] = 'verified'
     data['binary_files'] = inventory(classes)
@@ -144,7 +152,7 @@ def run(args):
         'engine_sha256': digest(rt['BCENV_ENGINE_JAR']), 'map_sha256': digest(out / 'maps' / map_path.name),
         'teams': {'A': {'source_sha256': ad['source_sha256'], 'binary_sha256': ad['binary_sha256'], 'package': ad['package']},
                   'B': {'source_sha256': bd['source_sha256'], 'binary_sha256': bd['binary_sha256'], 'package': bd['package']}},
-        'config': props, 'process': execute(cmd, out / 'engine.log', args.timeout),
+        'config': props, 'process': execute(cmd, out / 'engine.log', args.timeout, **deadline_options(args)),
         'status': 'infrastructure_failure', 'winner': None}
     replay = out / 'replay.bc23'
     if replay.is_file():
@@ -157,7 +165,7 @@ def run(args):
         if cp:
             result['extraction'] = execute([rt['BCENV_JAVA'], '-Xmx512m', '-cp', cp,
                 'ReplaySummary', str(replay)], out / 'replay-summary.json', args.timeout,
-                stderr=out / 'replay-extractor.log')
+                stderr=out / 'replay-extractor.log', **deadline_options(args))
             if result['extraction']['status'] == 'succeeded':
                 try:
                     summary = json.loads((out / 'replay-summary.json').read_text())
@@ -241,7 +249,7 @@ def _replay_query(args, *, paged):
                     'all' if args.robot_id is None else str(args.robot_id), str(args.limit)])
     if paged:
         command.append(str(args.record_offset))
-    process = execute(command, out / 'replay-query.json', args.timeout, stderr=out / 'replay-query.log')
+    process = execute(command, out / 'replay-query.json', args.timeout, stderr=out / 'replay-query.log', **deadline_options(args))
     result = {'schema': VERSION, 'kind': 'replay-page' if paged else 'replay-query', 'season': '2023',
         'engine_sha256': digest(rt['BCENV_ENGINE_JAR']),
         'replay': {'path': str(replay), 'sha256': before}, 'process': process,
@@ -323,7 +331,16 @@ def main():
     p.add_argument('--output', required=True)
     p.add_argument('--timeout', type=int, default=120)
     p.set_defaults(fn=replay_page)
+    # Only leaf commands execute work. The same absolute monotonic clock value
+    # is forwarded unchanged to every sequential compiler/engine/query process.
+    leaves = [sub.choices[name] for name in ('build', 'run', 'package')]
+    leaves += list(replay_sub.choices.values())
+    for leaf in leaves:
+        leaf.add_argument('--deadline-monotonic', type=float,
+                          help='optional finite absolute deadline on this host monotonic clock')
     args = parser.parse_args()
+    if args.deadline_monotonic is not None and not math.isfinite(args.deadline_monotonic):
+        parser.error('deadline-monotonic must be finite')
     if not 1 <= args.timeout <= 600:
         parser.error('timeout must be between 1 and 600 seconds')
     try:

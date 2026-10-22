@@ -21,6 +21,7 @@ import time
 import uuid
 
 from runtime.artifacts import execute, digest
+from services.public_finalist import FinalistValidation, FINALIST_ERRORS
 from services.scrimmage import accept_source_zip, SubmissionRejected
 from services.replay_feedback_v2 import ReplayPageQuery, project_replay_feedback_page
 from services.replay_feedback import FeedbackLimits
@@ -69,8 +70,17 @@ class AdapterWorker:
     def invoke(self, root, name, arguments, multiplier=1):
         # Adapter subcommands have their own per-process wall timeouts. Outer
         # limit covers its bounded sequential processes, not aggregate resources.
+        outer_timeout = self.timeout * multiplier + 15
+        if getattr(self, 'remaining_seconds', None):
+            remaining = self.remaining_seconds()
+            if remaining <= 0:
+                raise ValueError('run_halted')
+            # The adapter enforces this same absolute cutoff for every detached
+            # child. Do not kill it first: allow bounded child-reaping/log grace.
+            outer_timeout = remaining + 5
+            arguments = arguments + ['--deadline-monotonic', str(self.deadline_monotonic)]
         result = execute(self.command + arguments + ['--timeout', str(self.timeout)],
-                         root / (name + '.log'), self.timeout * multiplier + 15)
+                         root / (name + '.log'), outer_timeout)
         return result['exit_code'] == 0
 
     def run(self, root, submission):
@@ -99,8 +109,13 @@ class AdapterWorker:
             return {'status': 'rejected', 'reason': 'compile_rejected', 'diagnostics': diagnostics}
         if not self.invoke(root, 'package', ['package', '--build', str(root / 'build'), '--output', str(root / 'package')]):
             raise ValueError('package_failure')
+        return self.run_games(root)
+
+    def run_games(self, root):
         games = []
         for index, game in enumerate(self.games):
+            if getattr(self, "before_game", None):
+                self.before_game(root.name, index)
             own, opponent = str(root / 'build'), game.opponent_build
             a, b = (own, opponent) if game.own_slot == 'A' else (opponent, own)
             out = root / ('game-' + str(index))
@@ -165,7 +180,7 @@ class AdapterWorker:
 
 class LocalTrial:
     def __init__(self, root, worker, *, max_submissions=12, max_reads=2000, max_replay_queries=150,
-                 require_experiment_notes=False, max_notes=24):
+                 require_experiment_notes=False, max_notes=24, validation_games=None, max_run_seconds=2700):
         if type(require_experiment_notes) is not bool or type(max_notes) is not int or not 1 <= max_notes <= 32:
             raise ValueError('invalid_note_config')
         self.require_experiment_notes, self.max_notes = require_experiment_notes, max_notes
@@ -180,6 +195,7 @@ class LocalTrial:
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.closed = False
         self.halted = False
+        self.finalist = FinalistValidation(self, validation_games, max_run_seconds) if validation_games is not None else None
 
     def audit(self, operation, response):
         # Called under self.lock. Sequence, not wall time, establishes order.
@@ -248,7 +264,7 @@ class LocalTrial:
         try:
             root.mkdir()
             with self.lock:
-                halted = self.halted
+                halted = self.halted or self.closed or (self.finalist is not None and self.finalist.remaining_seconds() <= 0)
             result = ({'status': 'infrastructure_failure', 'reason': 'run_halted'} if halted
                       else self.worker.run(root, accepted))
             if type(result) is not dict or result.get('status') not in ('complete', 'rejected', 'infrastructure_failure'):
@@ -261,6 +277,13 @@ class LocalTrial:
                 pass
             result = {'status': 'infrastructure_failure', 'reason': 'worker_failure'}
         with self.lock:
+            if self.finalist and (self.closed or self.halted or self.finalist.remaining_seconds() <= 0):
+                result = {'status': 'infrastructure_failure', 'reason': 'run_halted'}
+            if self.finalist and result.get('status') == 'complete':
+                try:
+                    self.finalist.capture(sid, accepted.content_sha256)
+                except Exception:
+                    result = {'status': 'infrastructure_failure', 'reason': 'build_identity_failure'}
             binding = {key: self.records[sid][key] for key in ('note_id', 'note_sha256', 'note_sequence', 'submission_receipt')
                        if key in self.records[sid]}
             response = dict(result, schema=SCHEMA, submission_id=sid, source_sha256=accepted.content_sha256, **binding)
@@ -283,9 +306,22 @@ class LocalTrial:
             if self.closed or type(request) is not dict:
                 raise ValueError('invalid_request')
             op = request.get('operation')
+            if self.finalist and self.finalist.remaining_seconds() <= 0:
+                self.halted = True
+                if self.finalist.final_choice is None:
+                    self.finalist.phase = 'halted'
+                self.finalist.persist()
+                if op not in ('result', 'replay', 'validation_status'):
+                    raise ValueError('run_halted')
+            if op in ('lock_finalists', 'validation_status', 'select_finalist'):
+                if self.finalist is None:
+                    raise ValueError('validation_disabled')
+                return self.finalist.dispatch(request)
             if op == 'note':
                 return self._note(request)
             if op == 'submit':
+                if self.finalist and self.finalist.phase != 'training':
+                    raise ValueError('training_closed')
                 if self.halted:
                     raise ValueError('run_halted')
                 expected = {'operation', 'package', 'source_zip_base64'}
@@ -360,7 +396,8 @@ class LocalTrial:
                 if self.replays > self.max_replay_queries:
                     raise ValueError('replay_limit')
                 try:
-                    response = self.worker.replay(self.root / sid, sid, index, query,
+                    replay_worker = self.finalist.worker if self.finalist and sid in self.finalist.validation_ids.values() else self.worker
+                    response = replay_worker.replay(self.root / sid, sid, index, query,
                                                   record['games'][index]['replay_sha256'])
                 except Exception:
                     self.halted = True
@@ -371,10 +408,16 @@ class LocalTrial:
                              'game_index': index, 'source_sha256': record['source_sha256'],
                              'replay_sha256': replay_hash, 'query': q,
                              'feedback_sha256': hashlib.sha256(encoded(response)).hexdigest()}
-                receipt = self.audit('replay', reference if self.require_experiment_notes else
+                if self.finalist:
+                    reference.update(phase=record.get('phase', 'training'),
+                                     original_submission_id=record.get('original_submission_id', sid))
+                receipt = self.audit('replay', reference if self.require_experiment_notes or self.finalist else
                                      {'submission_id': sid, 'game_index': index, 'query': q})
                 result = {'schema': SCHEMA, 'status': 'replay', 'submission_id': sid,
                           'game_index': index, 'replay_sha256': replay_hash, 'feedback': response}
+                if self.finalist:
+                    result.update(phase=reference['phase'], original_submission_id=reference['original_submission_id'],
+                                  source_sha256=record['source_sha256'])
                 if self.require_experiment_notes:
                     reference['audit_receipt'] = receipt
                     self.replay_references[reference['reference_id']] = json.loads(encoded(reference))
@@ -386,6 +429,14 @@ class LocalTrial:
         with self.lock:
             self.closed = True
         self.executor.shutdown(wait=True)
+        if self.finalist and self.finalist.final_choice is None:
+            with self.lock:
+                self.halted = True
+                self.finalist.phase = 'halted'
+                try:
+                    self.finalist.event('trial_closed', self.finalist.state())
+                except OSError:
+                    pass
 
 
 def make_server(trial, port=0):
@@ -412,7 +463,7 @@ def make_server(trial, port=0):
             except Exception as error:
                 allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
                            'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
-                reason = str(error) if str(error) in allowed | NOTE_ERRORS else 'request_failed'
+                reason = str(error) if str(error) in allowed | NOTE_ERRORS | FINALIST_ERRORS else 'request_failed'
                 payload, code = encoded({'schema': SCHEMA, 'status': 'error', 'reason': reason}), 400
             self.send_response(code)
             self.send_header('Content-Type', 'application/json')
@@ -445,7 +496,7 @@ def closed_dispatch(trial, payload):
         allowed = {'invalid_request','request_limit','invalid_archive','archive_limit','invalid_package','invalid_source',
                    'run_halted','submission_limit','unknown_submission','read_limit','replay_limit','invalid_query','replay_unavailable'}
         return encoded({'schema': SCHEMA, 'status': 'error',
-                        'reason': str(error) if str(error) in allowed | NOTE_ERRORS else 'request_failed'})
+                        'reason': str(error) if str(error) in allowed | NOTE_ERRORS | FINALIST_ERRORS else 'request_failed'})
 
 
 def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=86400):
@@ -463,13 +514,17 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
     mailbox.mkdir(parents=True, exist_ok=False)
     requests, responses = mailbox / 'requests', mailbox / 'responses'
     requests.mkdir(); responses.mkdir()
-    (mailbox / 'ready.json').write_bytes(encoded({'schema': SCHEMA, 'profile': 'cooperative-file-rpc'}))
+    ready = {'schema': SCHEMA, 'profile': 'cooperative-file-rpc'}
+    if trial.finalist:
+        ready['public_validation'] = trial.finalist.state()
+    (mailbox / 'ready.json').write_bytes(encoded(ready))
     print(json.dumps({'mailbox': str(mailbox), 'profile': 'cooperative-file-rpc'}), flush=True)
     deadline = time.monotonic() + max_seconds
     processed = 0
     seen = set()
     try:
-        while processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()):
+        while (processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
+               (trial.finalist is None or trial.finalist.remaining_seconds() > 0)):
             # Revalidate fixed directories each iteration; never follow replacement links.
             checked_directory(mailbox); checked_directory(requests); checked_directory(responses)
             pending = sorted(requests.iterdir())
@@ -526,7 +581,9 @@ def main():
     worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90))
     trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12),
                        require_experiment_notes=config.get('require_experiment_notes', False),
-                       max_notes=config.get('max_notes', 24))
+                       max_notes=config.get('max_notes', 24),
+                       validation_games=config.get('validation_games'),
+                       max_run_seconds=config.get('max_run_seconds', 2700))
     if args.mailbox:
         serve_mailbox(trial, args.mailbox)
         return

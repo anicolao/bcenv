@@ -83,6 +83,8 @@ def launch_identity(config):
         'worker_command': config['command'], 'worker_executable_sha256': digest(executable),
         'games': config['games'], 'timeout': config.get('timeout', 90),
         'require_experiment_notes': config.get('require_experiment_notes', False),
+        'validation_games': config.get('validation_games'),
+        'max_run_seconds': config.get('max_run_seconds', 2700),
     }
 
 
@@ -122,7 +124,9 @@ def main(argv=None):
     trial = local_trial.LocalTrial(args.root, worker,
         max_submissions=config.get('max_submissions', 12),
         require_experiment_notes=config.get('require_experiment_notes', False),
-        max_notes=config.get('max_notes', 24))
+        max_notes=config.get('max_notes', 24),
+        validation_games=config.get('validation_games'),
+        max_run_seconds=config.get('max_run_seconds', 2700))
     local_trial.serve_mailbox(trial, args.mailbox)
     return 0
 
