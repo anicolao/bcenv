@@ -22,6 +22,8 @@ import uuid
 
 from runtime.artifacts import execute, digest
 from services.public_finalist import FinalistValidation, FINALIST_ERRORS
+from services.trial_profiles import UNSET, CONTINUITY, resolve_profile, trial_options
+from services.storage_guard import StorageGuard
 from services.scrimmage import accept_source_zip, SubmissionRejected
 from services.replay_feedback_v2 import ReplayPageQuery, project_replay_feedback_page
 from services.replay_feedback import FeedbackLimits
@@ -77,6 +79,8 @@ class AdapterWorker:
         self.match_timeout = match_timeout
 
     def invoke(self, root, name, arguments, multiplier=1):
+        checkpoint = getattr(self, 'storage_checkpoint', lambda stage: None)
+        checkpoint('adapter_before')
         # Adapter subcommands have their own per-process wall timeouts. Outer
         # limit covers its bounded sequential processes, not aggregate resources.
         timeout = self.match_timeout if arguments and arguments[0] == 'run' else self.timeout
@@ -89,8 +93,11 @@ class AdapterWorker:
             # child. Do not kill it first: allow bounded child-reaping/log grace.
             outer_timeout = remaining + 5
             arguments = arguments + ['--deadline-monotonic', str(self.deadline_monotonic)]
-        result = execute(self.command + arguments + ['--timeout', str(timeout)],
-                         root / (name + '.log'), outer_timeout)
+        try:
+            result = execute(self.command + arguments + ['--timeout', str(timeout)],
+                             root / (name + '.log'), outer_timeout)
+        finally:
+            checkpoint('adapter_after')
         return result['exit_code'] == 0
 
     def run(self, root, submission):
@@ -194,23 +201,63 @@ class AdapterWorker:
 
 
 class LocalTrial:
-    def __init__(self, root, worker, *, max_submissions=12, max_reads=2000, max_replay_queries=150,
-                 require_experiment_notes=False, max_notes=24, validation_games=None, max_run_seconds=2700):
-        if type(require_experiment_notes) is not bool or type(max_notes) is not int or not 1 <= max_notes <= 32:
-            raise ValueError('invalid_note_config')
-        self.require_experiment_notes, self.max_notes = require_experiment_notes, max_notes
+    def __init__(self, root, worker, *, max_submissions=UNSET, max_reads=UNSET, max_replay_queries=UNSET,
+                 require_experiment_notes=UNSET, max_notes=UNSET, validation_games=None,
+                 max_run_seconds=UNSET, max_mailbox_requests=UNSET, profile=UNSET):
+        self.profile_bounds = resolve_profile(profile, max_submissions=max_submissions, max_reads=max_reads,
+            max_replay_queries=max_replay_queries, require_experiment_notes=require_experiment_notes,
+            max_notes=max_notes, max_run_seconds=max_run_seconds, max_mailbox_requests=max_mailbox_requests)
+        self.profile = self.profile_bounds['profile']
+        if self.profile == CONTINUITY and validation_games is None:
+            raise ValueError('invalid_continuity_config')
+        for key in ('max_submissions', 'max_reads', 'max_replay_queries', 'require_experiment_notes',
+                    'max_notes', 'max_mailbox_requests'):
+            setattr(self, key, self.profile_bounds[key])
         self.notes, self.used_notes, self.replay_references = {}, set(), {}
         self.audit_sequence, self.audit_hash = 0, '0' * 64
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=False)  # fresh-run ownership, never silently resume
         self.worker = worker
-        self.max_submissions, self.max_reads, self.max_replay_queries = max_submissions, max_reads, max_replay_queries
-        self.records, self.reads, self.replays = {}, 0, 0
+        self.records, self.reads, self.replays, self.requests = {}, 0, 0, 0
+        self.mailbox_attempts = 0
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.closed = False
         self.halted = False
-        self.finalist = FinalistValidation(self, validation_games, max_run_seconds) if validation_games is not None else None
+        self.finalist = None
+        self.storage_guard = StorageGuard(self.root) if self.profile == CONTINUITY else None
+        self.worker.storage_checkpoint = self.storage_checkpoint
+        self.finalist = FinalistValidation(self, validation_games, self.profile_bounds['max_run_seconds']) if validation_games is not None else None
+        self.storage_checkpoint('initialization')
+
+    def usage_snapshot(self):
+        """Actual debits, under the same lock as admission; not inferred successes."""
+        with self.lock:
+            return {'read_debits': self.reads, 'replay_debits': self.replays,
+                    'note_debits': len(self.notes),
+                    'training_version_debits': sum(r.get('phase', 'training') != 'validation'
+                                                  for r in self.records.values()),
+                    'mailbox_attempts': self.mailbox_attempts, 'dispatch_attempts': self.requests}
+
+    def mailbox_debit(self, processed):
+        if self.profile == CONTINUITY:
+            with self.lock:
+                if processed != self.mailbox_attempts + 1 or processed > self.max_mailbox_requests:
+                    self.halted = True
+                    raise ValueError('request_limit')
+                self.mailbox_attempts = processed
+
+    def storage_checkpoint(self, stage):
+        if self.storage_guard is None:
+            return None
+        with self.lock:
+            try:
+                return self.storage_guard.check(stage)
+            except (OSError, ValueError):
+                self.halted = True
+                if self.finalist and self.finalist.final_choice is None:
+                    self.finalist.phase = 'halted'
+                raise ValueError('run_halted') from None
 
     def audit(self, operation, response):
         # Called under self.lock. Sequence, not wall time, establishes order.
@@ -280,8 +327,12 @@ class LocalTrial:
             root.mkdir()
             with self.lock:
                 halted = self.halted or self.closed or (self.finalist is not None and self.finalist.remaining_seconds() <= 0)
-            result = ({'status': 'infrastructure_failure', 'reason': 'run_halted'} if halted
-                      else self.worker.run(root, accepted))
+            self.storage_checkpoint('training_before')
+            try:
+                result = ({'status': 'infrastructure_failure', 'reason': 'run_halted'} if halted
+                          else self.worker.run(root, accepted))
+            finally:
+                self.storage_checkpoint('training_after')
             if type(result) is not dict or result.get('status') not in ('complete', 'rejected', 'infrastructure_failure'):
                 raise ValueError('invalid_worker_result')
         except Exception as error:
@@ -317,6 +368,30 @@ class LocalTrial:
                                      'status': 'infrastructure_failure', 'reason': 'persistence_failure', **binding}
 
     def dispatch(self, request):
+        with self.lock:
+            if self.profile == CONTINUITY:
+                self.requests += 1
+                if self.requests > self.max_mailbox_requests:
+                    self.halted = True
+                    raise ValueError('request_limit')
+            self.storage_checkpoint('request_before')
+            try:
+                response = self._dispatch(request)
+            except Exception:
+                self.storage_checkpoint('request_failed')
+                raise
+            try:
+                self.storage_checkpoint('request_after')
+            except ValueError:
+                # A valid final selection is not retroactively revoked when its
+                # own bounded control receipt crosses the sampled high-water mark.
+                # Further work is halted and the local checkpoint records this.
+                if not (type(request) is dict and request.get('operation') == 'select_finalist'
+                        and self.finalist and self.finalist.final_choice is not None):
+                    raise
+            return response
+
+    def _dispatch(self, request):
         with self.lock:
             if self.closed or type(request) is not dict:
                 raise ValueError('invalid_request')
@@ -461,6 +536,8 @@ class LocalTrial:
 
 
 def make_server(trial, port=0):
+    if trial.profile == CONTINUITY:
+        raise ValueError('continuity_requires_mailbox')
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -520,7 +597,7 @@ def closed_dispatch(trial, payload):
                         'reason': str(error) if str(error) in allowed | NOTE_ERRORS | FINALIST_ERRORS else 'request_failed'})
 
 
-def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=86400):
+def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=86400):
     """Cooperative file RPC, not authentication or protection from same-user writes.
 
     Fresh owner-created directories; UUID names, no-follow bounded file reads,
@@ -528,6 +605,15 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
     remains in trusted run root. A crash after dispatch can leave an uncertain
     request: clients must not resubmit automatically.
     """
+    if max_requests is UNSET:
+        max_requests = trial.max_mailbox_requests
+    if trial.profile == CONTINUITY and (type(max_requests) is not int or
+            max_requests != trial.max_mailbox_requests or trial.closed or trial.halted):
+        raise ValueError('invalid_mailbox_profile')
+    if trial.profile == CONTINUITY:
+        if type(max_seconds) is not int or max_seconds <= 0:
+            raise ValueError('invalid_mailbox_profile')
+        max_seconds = min(max_seconds, trial.profile_bounds['mailbox_max_seconds'])
     mailbox = Path(mailbox).absolute()
     for component in (mailbox, *mailbox.parents):
         if component.is_symlink():
@@ -535,6 +621,9 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
     mailbox.mkdir(parents=True, exist_ok=False)
     requests, responses = mailbox / 'requests', mailbox / 'responses'
     requests.mkdir(); responses.mkdir()
+    if trial.storage_guard is not None:
+        trial.storage_guard.add_mailbox(mailbox)
+        trial.storage_checkpoint('mailbox_initialization')
     ready = {'schema': SCHEMA, 'profile': 'cooperative-file-rpc'}
     if trial.finalist:
         ready['public_validation'] = trial.finalist.state()
@@ -545,6 +634,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
     seen = set()
     try:
         while (processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
+               (trial.profile != CONTINUITY or not trial.halted) and
                (trial.finalist is None or trial.finalist.remaining_seconds() > 0)):
             # Revalidate fixed directories each iteration; never follow replacement links.
             checked_directory(mailbox); checked_directory(requests); checked_directory(responses)
@@ -555,8 +645,17 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
             handled = False
             for request in pending:
                 if not re.fullmatch(r'[0-9a-f]{32}\.json', request.name):
+                    if trial.profile == CONTINUITY:
+                        handled = True; processed += 1
+                        trial.mailbox_debit(processed)
+                        trial.storage_checkpoint('mailbox_invalid_name')
+                        request.unlink()
+                        if processed >= max_requests:
+                            break
                     continue
                 handled = True; processed += 1
+                trial.mailbox_debit(processed)
+                trial.storage_checkpoint('mailbox_request_before')
                 if request.name in seen:
                     request.unlink()
                     if processed >= max_requests:
@@ -580,6 +679,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
                 with temporary.open('xb') as handle:
                     handle.write(response)
                 os.replace(temporary, responses / request.name)
+                trial.storage_checkpoint('mailbox_response_after')
                 request.unlink()
                 if processed >= max_requests:
                     break
@@ -587,7 +687,9 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=2200, max_seconds=8
                 time.sleep(.05)
     finally:
         trial.halted = True
-        (mailbox / 'stopped.json').write_bytes(encoded({'schema': SCHEMA, 'processed': processed}))
+        (mailbox / 'stopped.json').write_bytes(encoded({'schema': SCHEMA, 'processed': processed,
+            **({'dispatch_attempts': trial.requests, 'usage': trial.usage_snapshot()}
+               if trial.profile == CONTINUITY else {})}))
         trial.close()
 
 
@@ -601,11 +703,10 @@ def main():
     config = read_json(args.config)
     worker = AdapterWorker(config['command'], [DevelopmentGame(**g) for g in config['games']], config.get('timeout', 90),
                            match_timeout=config.get('match_timeout', DEFAULT_MATCH_TIMEOUT))
-    trial = LocalTrial(args.root, worker, max_submissions=config.get('max_submissions', 12),
-                       require_experiment_notes=config.get('require_experiment_notes', False),
-                       max_notes=config.get('max_notes', 24),
-                       validation_games=config.get('validation_games'),
-                       max_run_seconds=config.get('max_run_seconds', 2700))
+    options = trial_options(config)
+    if options['profile'] == CONTINUITY and not args.mailbox:
+        raise ValueError('continuity_requires_mailbox')
+    trial = LocalTrial(args.root, worker, **options)
     if args.mailbox:
         serve_mailbox(trial, args.mailbox)
         return

@@ -70,6 +70,8 @@ def probe(command, output, timeout=30):
 
 
 def launch_identity(config):
+    options = local_trial.trial_options(config)
+    bounds = local_trial.resolve_profile(options['profile'], **{k: v for k, v in options.items() if k not in ('profile', 'validation_games')})
     repo = Path(__file__).resolve().parents[1]
     executable = Path(config['command'][0])
     if not executable.is_absolute() or not executable.is_file():
@@ -83,9 +85,10 @@ def launch_identity(config):
         'worker_command': config['command'], 'worker_executable_sha256': digest(executable),
         'games': config['games'], 'timeout': config.get('timeout', 90),
         'match_timeout': config.get('match_timeout', config.get('timeout', 90)),
-        'require_experiment_notes': config.get('require_experiment_notes', False),
+        'require_experiment_notes': bounds['require_experiment_notes'],
+        **({'resolved_profile': dict(bounds)} if bounds['profile'] == local_trial.CONTINUITY else {}),
         'validation_games': config.get('validation_games'),
-        'max_run_seconds': config.get('max_run_seconds', 2700),
+        'max_run_seconds': bounds['max_run_seconds'],
     }
 
 
@@ -123,12 +126,7 @@ def main(argv=None):
         return 0
     # Reuse the validated config snapshot and exact same process context; do not
     # re-read a config or start a different Nix/python wrapper after probing.
-    trial = local_trial.LocalTrial(args.root, worker,
-        max_submissions=config.get('max_submissions', 12),
-        require_experiment_notes=config.get('require_experiment_notes', False),
-        max_notes=config.get('max_notes', 24),
-        validation_games=config.get('validation_games'),
-        max_run_seconds=config.get('max_run_seconds', 2700))
+    trial = local_trial.LocalTrial(args.root, worker, **local_trial.trial_options(config))
     local_trial.serve_mailbox(trial, args.mailbox)
     return 0
 
