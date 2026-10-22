@@ -38,8 +38,8 @@ Tests are candidate-authored `.java` files with an ordinary `public static void
 main(String[] args)`. They may call actual methods in the candidate's verified
 classes and use the public API. Java assertions are enabled. Throw an exception
 or exit nonzero on failure; a test that merely prints a failure message and exits
-zero passes this runner. No game-strategy fixtures or suggested assertions are
-provided. The test main must be compiled from the test inputs, and test classes
+zero completes execution successfully; it does not establish that a claim was
+checked. No game-strategy fixtures or suggested assertions are provided. The test main must be compiled from the test inputs, and test classes
 cannot replace candidate or public engine/API class names. Each Java process
 runs with its fresh output directory as its working directory.
 
@@ -48,8 +48,8 @@ engine identity, snapshots candidate classes and test sources, compiles tests,
 and executes the actual Java classes. It records test source and binary hashes,
 class name, candidate source/binary and engine hashes, subprocess status and log
 hashes. Input build and snapshots are checked again afterwards. Tests run on an
-**uninstrumented JVM**: passing establishes only that those Java tests exited
-successfully, not Battlecode instrumented/bytecode/engine equivalence, test
+**uninstrumented JVM**: successful execution establishes only that those Java tests
+exited successfully, not Battlecode instrumented/bytecode/engine equivalence, test
 coverage, strategic competence, or match performance. No scrimmage is launched.
 
 Every compiler/verifier/test process has a 256 MiB heap, 64 KiB combined log cap,
@@ -103,3 +103,33 @@ or install a fallback runtime.
 
 The Nix `python-unit` CI check supplies these pinned runtime variables, so actual
 Java integration tests execute there rather than silently skipping.
+
+## Execution receipts and claim evidence (future exports)
+
+Java-test results use `bcenv.candidate-check.v2`. A zero-exit test main with
+unchanged snapshots reports `status: "execution_succeeded"`, not `"passed"`.
+`execution_status` records `not_run`, `succeeded`, or the subprocess failure
+status. `assertions_enabled: true` means the runner is configured with `-ea`; it
+does not mean any assertion ran (and the JVM may not have run at all). Every
+receipt reports `assertion_coverage: "unknown"` and
+`correctness: "not_established"`. Empty mains, printed success messages and real
+successful assertions cannot be distinguished as correctness evidence from exit
+status alone. A failed assertion, compilation failure, timeout, output overflow or
+integrity failure still produces nonzero. Build receipts remain v1. Existing
+exports and historical results are unchanged; v1 `passed` meant execution only.
+
+For each correctness claim in an experiment report, provide a concise inventory:
+
+| Claim / scenario ID | Expected condition | Executable check | Observed result | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+
+Identify the actual assertion or explicit failure condition and its test source
+location; cite the receipt, exact tested source/binary hashes and relevant logs.
+Distinguish a printed observation from an executable check. If no check ran, mark
+the claim **untested**; if an output was inspected manually, label that as manual
+observation rather than an asserted outcome. Record failed and incomplete checks
+as well as successful executions. Do not infer per-scenario success merely from
+the overall test process exit code. This inventory is candidate-authored evidence
+for review, not machine-verified coverage or a trusted correctness oracle. The
+helper does not count assertion syntax, validate claim inventories, generate test
+scenarios, or supply bot strategy.

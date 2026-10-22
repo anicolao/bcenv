@@ -79,12 +79,45 @@ class RealJavaChecks(unittest.TestCase):
     def test_actual_candidate_method_pass(self):
         result, code = self.run_java('assert example.RobotPlayer.twice(7) == 14;')
         self.assertEqual(code, 0)
-        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(result['status'], 'execution_succeeded')
+        self.assert_execution_only(result)
         self.assertEqual(len(result['steps']), 2)
+
+    def assert_execution_only(self, result):
+        self.assertEqual(result['schema'], 'bcenv.candidate-check.v2')
+        self.assertEqual(result['execution_status'], 'succeeded')
+        self.assertIs(result['assertions_enabled'], True)
+        self.assertEqual(result['assertion_coverage'], 'unknown')
+        self.assertEqual(result['correctness'], 'not_established')
+
+    def test_printed_success_is_only_execution(self):
+        result, code = self.run_java('System.out.println("All claimed checks passed");')
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'execution_succeeded')
+        self.assert_execution_only(result)
+
+    def test_empty_main_is_only_execution(self):
+        result, code = self.run_java('')
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'execution_succeeded')
+        self.assert_execution_only(result)
+
+    def test_compile_failure_does_not_execute(self):
+        result, code = self.run_java('this is not Java;')
+        self.assertEqual(code, 1)
+        self.assertEqual(result['schema'], 'bcenv.candidate-check.v2')
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['execution_status'], 'not_run')
+        self.assertEqual(len(result['steps']), 1)
+        self.assertEqual(result['correctness'], 'not_established')
+        self.assertEqual(result['assertion_coverage'], 'unknown')
 
     def test_actual_candidate_method_assertion_failure(self):
         result, code = self.run_java('assert example.RobotPlayer.twice(7) == 15;')
         self.assertEqual(code, 1)
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['execution_status'], 'failed')
+        self.assertEqual(result['correctness'], 'not_established')
         self.assertEqual(result['steps'][-1]['status'], 'failed')
 
     def test_timeout(self):
