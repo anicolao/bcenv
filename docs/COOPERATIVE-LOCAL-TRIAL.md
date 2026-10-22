@@ -45,7 +45,7 @@ compilation and actual Java tests use the exported
 server verification, the prospective note, or scrimmage evidence.
 
 The service owner supplies `command` (fixed bcenv argv), `games` (label,
-opponent_build, map_path, own_slot), `timeout` (at most 120 seconds), and
+opponent_build, map_path, own_slot), `timeout` (integer 1–120 seconds), optional `match_timeout` (integer 1–300 seconds), and
 `max_submissions`. The schedule supports 1–8 games per accepted, successfully
 built submission. Record explicit per-run configuration and budgets rather than
 assuming a universal cap:
@@ -109,3 +109,20 @@ infrastructure halt, build timeout classification and replay mutation refusal.
 Synthetic tests are not real match or competitor evidence. This historical count
 is not the current aggregate suite count; see the linked extensions for their
 validation scope. The original BCENV-004 protocol lives in bc-planner's 2023-cooperative-local-trial.md.
+
+### Separate trusted match wall limit
+
+`match_timeout` is operator configuration, never a candidate request field.
+When absent it resolves to `timeout`, preserving the prior per-process limits.
+Explicit null, booleans, non-integers and values outside 1–300 are rejected.
+Both training and locked-finalist workers use this limit only for `run`: the
+engine and its initial replay-summary extraction each receive that per-process
+limit. It is not a total per-game wall allowance. Build, package and subsequent
+replay queries still use `timeout` (at most120 seconds).
+
+The same existing absolute trial deadline clips every adapter subprocess,
+including the engine and initial summary. Increasing the match limit does not
+reset or extend the trial clock, permit a child launch after cutoff, restore
+failed games or guarantee that the maximum game allocation will finish. The
+outer worker retains its bounded child-cleanup grace. Launch parity binds both
+resolved limits so integration and live settings cannot silently differ.
