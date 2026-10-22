@@ -56,6 +56,7 @@ in {
     javac -source 8 -target 8 -cp ${jar} -d classes ${src}/seasons/2023/replay/*.java
     java -cp classes:${jar} ReplaySummaryTest
     java -Xmx512m -cp classes:${jar} ReplayQueryTest
+    java -Xmx512m -cp classes:${jar} OwnDiagnosticsTest
     touch "$out"
   '';
   replay-query = pkgs.runCommand "bcenv-replay-query" { nativeBuildInputs = [ pkgs.jdk8 bcenv pkgs.python3 ]; } ''

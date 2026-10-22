@@ -88,6 +88,7 @@ def main():
     result = subs.add_parser('result'); result.add_argument('--submission', required=True)
     replay = subs.add_parser('replay'); replay.add_argument('--submission', required=True); replay.add_argument('--game', type=int, required=True)
     replay.add_argument('--start', type=int, required=True); replay.add_argument('--end', type=int, required=True)
+    replay.add_argument('--mode', choices=['actions', 'own_diagnostics'], default='actions')
     replay.add_argument('--robot', type=int); replay.add_argument('--offset', type=int, default=0); replay.add_argument('--limit', type=int, default=64)
     finalists = subs.add_parser('lock-finalists', help='Atomically lock two completed training submissions before validation')
     finalists.add_argument('--submission', action='append', required=True,
@@ -126,6 +127,8 @@ def main():
         body['submission_id'] = args.submission
         if args.operation == 'replay':
             body.update(game_index=args.game, query={'round_start':args.start,'round_end':args.end,'robot_id':args.robot,'record_offset':args.offset,'record_limit':args.limit})
+            if args.mode != 'actions':
+                body['query']['mode'] = args.mode
     if args.mailbox:
         print(json.dumps(mailbox_request(args.mailbox,body),indent=2,sort_keys=True))
         return

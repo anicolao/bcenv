@@ -1151,3 +1151,25 @@ Source: user message Sentinel_7394f361f4e881919d712f2e0bda2fd6, 2026-10-21 13:07
 ```text
 Ok let's proceed.
 ```
+
+## Prompt repetition: Own-team replay diagnostics
+
+Verbatim source: planner009/PROMPTS.md Prompt 173, scheduled 2026-10-22T12:35:22+00:00, actual receipt 12:36:42 UTC. Earlier source coverage remains append-only: standing mandate and direct messages already recorded; planner source reconciliation maps standing mandate107, direct117–119, scheduled131–159,162,165–166,168,171,173. The narrow projection implementation is an agent decision under that mandate, not new user wording. No new games, candidate changes, held-out access, merge permission or private outcome publication.
+
+````text
+Automation run instructions
+
+Complete the task below autonomously using the available tools. Follow the user's instructions, existing permissions, and explicit notification rules.
+
+Run context:
+- Title: Battlecode progress check
+- Run: 2026-10-22T12:35:22+00:00
+
+Rules:
+1. Avoid optional follow-up questions. Make reasonable assumptions and continue without waiting for input. If essential information or approval is missing, follow rule 4.
+2. If blocked, complete useful independent work, provide any useful partial result, and state exactly what is missing. If available history shows the same blocker has prevented progress across multiple runs, ask in the final response whether the user wants to pause this automation. Do not pause the automation without approval unless you created it without the user asking for it.
+3. When subagents are available, delegate substantive work by default unless the task is simple or the user asks otherwise. Give each subagent a clear task and integrate its results before finishing.
+
+Task:
+Check progress on the authorized long-running BC2023 competitive-environment project in anicolao/bcenv and anicolao/bc-planner. Verify the latest project checkpoint, active work, experiments and CI; identify stalled work and resume or repair authorized steps without duplicating active execution. Continue toward a credible environment in which a fresh autonomous LLM builds a competent bot and uses scrimmages through an enforced interface without access to evaluator infrastructure or held-out competitor bots. Evaluate observable reasoning, code quality, replay-grounded experimentation and performance against genuine held-out 2023 competitors. Publish incremental PRs and summary documents as authorized. Do not infer merge permission, incur unapproved charges, weaken access restrictions, disclose held-out benchmark material to the competitor, or coach its strategy. Share meaningful milestones, blockers requiring user action and completion in this ChatGPT conversation; stay quiet on unchanged routine checks and avoid nonurgent overnight updates. When the goal is credibly achieved or the user stops it, close the progress check.
+````
