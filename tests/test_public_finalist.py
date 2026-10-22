@@ -425,7 +425,15 @@ class PublicFinalistTests(unittest.TestCase):
 
     def test_worker_timeout_is_capped_by_remaining_service_time(self):
         self.worker.remaining_seconds = lambda: 3.25
-        with patch('services.local_trial.execute', return_value={'exit_code': 0}) as execute:
+        def completed_execute(command, *args, **kwargs):
+            # Synthetic ownership/ack contract only: this mock creates no child.
+            kwargs['ownership']['direct_child_wait_completed'] = True
+            Path(command[command.index('--cleanup-ack') + 1]).write_text(json.dumps({
+                'schema': 'bcenv.cooperative-cleanup.v1',
+                'direct_child_waits_completed': True,
+                'scope': 'normal adapter return only; not descendant containment'}))
+            return {'exit_code': 0}
+        with patch('services.local_trial.execute', side_effect=completed_execute) as execute:
             self.assertTrue(self.worker.invoke(self.base, 'synthetic', ['--help'], 2))
         self.assertEqual(execute.call_args.args[2], 8.25)
         command = execute.call_args.args[0]

@@ -127,7 +127,8 @@ def main(argv=None):
     # Reuse the validated config snapshot and exact same process context; do not
     # re-read a config or start a different Nix/python wrapper after probing.
     trial = local_trial.LocalTrial(args.root, worker, **local_trial.trial_options(config))
-    local_trial.serve_mailbox(trial, args.mailbox)
+    with local_trial.cooperative_signals(trial):
+        local_trial.serve_mailbox(trial, args.mailbox)
     return 0
 
 

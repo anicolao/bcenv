@@ -30,7 +30,8 @@ def export(workspace, launch_prefix=None):
         raise FileExistsError('Candidate launcher already exists')
     target = root / '.candidate-check'
     target.mkdir(exist_ok=False)
-    for rel in ('tools/candidate_check.py', 'seasons/2023/adapter.py', 'runtime/artifacts.py'):
+    for rel in ('tools/candidate_check.py', 'seasons/2023/adapter.py', 'runtime/artifacts.py',
+                'runtime/cancellation.py'):
         destination = target / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / rel, destination)

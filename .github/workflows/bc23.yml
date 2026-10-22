@@ -26,6 +26,15 @@ jobs:
           nix path-info --json .#bcenv > evidence/store-path.json
           nix build .#checks.x86_64-linux.fixture-game --out-link fixture-evidence
           cp -rL fixture-evidence evidence/fixtures
+          # Evaluate only: never rebuild/re-run qualification to collect evidence.
+          qualification="$(nix eval --raw .#checks.x86_64-linux.replay-query.outPath)"
+          diagnostic="$(nix eval --raw .#checks.x86_64-linux.diagnostic-replay-query.outPath)"
+          test ! -e "$diagnostic/cooperative-qualification"
+          cp "$qualification/qualification-selection.json" evidence/active-selection.json
+          cp "$diagnostic/qualification-selection.json" evidence/diagnostic-selection.json
+          cp "$qualification/cooperative-qualification/evidence.json" evidence/cooperative-qualification.json
+          export QUALIFICATION_PR_HEAD="${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 tools/record_qualification_identity.py evidence
       - name: Retain release identity
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

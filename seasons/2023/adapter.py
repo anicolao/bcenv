@@ -34,7 +34,10 @@ def deadline_options(args):
     # Preserve the no-deadline execute call contract, including exported helpers
     # that wrap the legacy function without accepting additional keywords.
     deadline = getattr(args, 'deadline_monotonic', None)
-    return {} if deadline is None else {'deadline_monotonic': deadline}
+    options = {} if deadline is None else {'deadline_monotonic': deadline}
+    if getattr(args, 'cancel_fd', None) is not None:
+        options['cancel_fd'] = args.cancel_fd
+    return options
 
 
 def build(args):
@@ -357,6 +360,8 @@ def main():
     leaves = [sub.choices[name] for name in ('build', 'run', 'package')]
     leaves += list(replay_sub.choices.values())
     for leaf in leaves:
+        leaf.add_argument('--cancel-fd', type=int, help='trusted inherited cooperative cancellation pipe')
+        leaf.add_argument('--cleanup-ack', help='trusted invocation-specific cleanup acknowledgment')
         leaf.add_argument('--deadline-monotonic', type=float,
                           help='optional finite absolute deadline on this host monotonic clock')
     args = parser.parse_args()
@@ -365,7 +370,12 @@ def main():
     if not 1 <= args.timeout <= 600:
         parser.error('timeout must be between 1 and 600 seconds')
     try:
-        return args.fn(args)
+        result = args.fn(args)
+        if args.cleanup_ack:
+            write(args.cleanup_ack, {'schema': 'bcenv.cooperative-cleanup.v1',
+                                    'direct_child_waits_completed': True,
+                                    'scope': 'normal adapter return only; not descendant containment'})
+        return result
     except (ValueError, OSError, KeyError) as error:
         print(str(error), file=sys.stderr)
         return 2

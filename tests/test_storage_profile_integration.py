@@ -105,7 +105,13 @@ class StorageProfileIntegrationTests(unittest.TestCase):
 
     def test_adapter_output_crossing_halts_before_next_operation(self):
         self.trial.storage_guard.limit_bytes = 100000
-        def output(*args):
+        def output(command, *args, **kwargs):
+            # Synthetic output and ownership/ack; no process is launched here.
+            kwargs['ownership']['direct_child_wait_completed'] = True
+            Path(command[command.index('--cleanup-ack') + 1]).write_text(json.dumps({
+                'schema': 'bcenv.cooperative-cleanup.v1',
+                'direct_child_waits_completed': True,
+                'scope': 'normal adapter return only; not descendant containment'}))
             (self.trial.root / 'synthetic-child.tmp').write_bytes(b'x' * 110000)
             return {'exit_code': 0}
         with patch.object(local_trial, 'execute', side_effect=output) as execute:
@@ -119,9 +125,12 @@ class StorageProfileIntegrationTests(unittest.TestCase):
 
     def test_failed_adapter_still_checks_output_growth(self):
         self.trial.storage_guard.limit_bytes = 100000
-        def output(*args):
+        def output(*args, **kwargs):
+            # The mock itself writes storage growth and raises before creating
+            # any process. This is not evidence about a real child's lifecycle.
+            kwargs['ownership']['not_started'] = True
             (self.trial.root / 'failed-child.tmp').write_bytes(b'x' * 110000)
-            raise OSError('synthetic child failure')
+            raise OSError('synthetic prelaunch failure')
         with patch.object(local_trial, 'execute', side_effect=output):
             with self.assertRaisesRegex(ValueError, 'run_halted'):
                 self.worker.invoke(self.trial.root, 'synthetic', ['build'])
