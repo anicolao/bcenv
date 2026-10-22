@@ -120,3 +120,21 @@ failure is best effort, not a guarantee that fsync will succeed.
 Synthetic tests exercise capacity boundaries, malformed requests, source/lock
 integrity, deadline inheritance and storage crossings. They do not establish
 native-agent six-hour reliability, bot competence or a successful future run.
+
+## Atomic mailbox publication
+
+Only canonical `<32 lowercase hex digits>.json` files are committed requests.
+The unchanged client first writes `<same ID>.tmp` and atomically renames it.
+Canonical staging files are not debited, dispatched or removed by the consumer;
+they must be regular files of at most 1,500,000 bytes (including zero while being
+written). Bad staging types, symlinks or observed oversize fail closed. Staging
+still counts toward the 32-entry queue and service-owned storage scope, and does
+not extend the deadline. Malformed noncanonical names remain charged attempts.
+
+A staging name disappearing during inspection is an ordinary commit race. A
+committed request disappearing after its attempt is debited retains that debit
+and its seen ID: if no payload was read, an invalid-request response is retained;
+if dispatch occurred, its response is retained. Missing cleanup targets are
+harmless; neither case causes a retry or second dispatch. Other cleanup errors
+are not suppressed. The separate storage scanner's documented fail-closed
+concurrent-disappearance behavior is unchanged.

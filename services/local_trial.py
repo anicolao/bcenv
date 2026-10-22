@@ -644,12 +644,23 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
                 raise ValueError('mailbox_queue_limit')
             handled = False
             for request in pending:
+                if trial.profile == CONTINUITY and re.fullmatch(r'[0-9a-f]{32}\.tmp', request.name):
+                    # The unchanged client publishes by atomic tmp -> json rename.
+                    # Staging is not a request attempt and must never be consumed.
+                    # It still occupies the bounded queue and accounted storage.
+                    try:
+                        metadata = request.lstat()
+                    except FileNotFoundError:
+                        continue  # producer committed after this directory snapshot
+                    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_REQUEST:
+                        raise ValueError('mailbox_invalid_staging')
+                    continue  # zero bytes are legitimate while the producer writes
                 if not re.fullmatch(r'[0-9a-f]{32}\.json', request.name):
                     if trial.profile == CONTINUITY:
                         handled = True; processed += 1
                         trial.mailbox_debit(processed)
                         trial.storage_checkpoint('mailbox_invalid_name')
-                        request.unlink()
+                        request.unlink(missing_ok=True)
                         if processed >= max_requests:
                             break
                     continue
@@ -657,7 +668,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
                 trial.mailbox_debit(processed)
                 trial.storage_checkpoint('mailbox_request_before')
                 if request.name in seen:
-                    request.unlink()
+                    request.unlink(missing_ok=True)
                     if processed >= max_requests:
                         break
                     continue
@@ -680,7 +691,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
                     handle.write(response)
                 os.replace(temporary, responses / request.name)
                 trial.storage_checkpoint('mailbox_response_after')
-                request.unlink()
+                request.unlink(missing_ok=True)
                 if processed >= max_requests:
                     break
             if not handled:
