@@ -75,3 +75,11 @@ Path('query-integration-evidence.json').write_text(json.dumps({
         'invalid arguments', 'non-overwrite', 'malformed gzip', 'truncated gzip',
         'compressed input cap', 'uncompressed input cap']}, indent=2) + '\n')
 print('Packaged replay query integration: PASS')
+
+# Five ordered inert cancellation cases, only on this approved remote check.
+# The source fixture is separate from the real packaged CLI used by case1.
+import os
+import sys
+sys.path.insert(0, os.environ['BCENV_QUALIFICATION_SOURCE'])
+from tests.cooperative_runtime_qualification import run_remote
+run_remote('cooperative-qualification', 'synthetic.bc23')

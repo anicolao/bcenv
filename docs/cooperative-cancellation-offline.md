@@ -59,3 +59,45 @@ parity; test nested cancellation and acknowledgment ordering, synchronous replay
 interruption, writer non-inheritance, absent/invalid descriptor handling, queued
 work, and marker-write failures using bounded inert fixtures. These tests are not
 authorization to run them while previous helper quiescence is unknown.
+
+## Prospective separate-runner qualification subset
+
+A reviewed remote-only harness adds exactly five ordered inert cases inside the
+existing packaged replay-query check, without new workflows/checks or matches:
+(1) packaged live-writer/EOF/invalid-FD controls, (2) source nested worker SIGINT
+plus queued admission, (3) source synchronous replay-dispatch SIGINT, (4) source
+nested SIGTERM, (5) successful cooperative cleanup followed by a deliberate
+receipt-replacement failure. The maximum is three packaged wrapper calls with one
+synthetic-query JVM, four inert source adapter fixtures and four inner Python
+children. Existing ordinary CI fixture matches are unchanged and separate.
+
+Source cases call the actual source service/runtime wait path with inert adapter
+fixtures that model its acknowledgment contract; they do not execute the packaged
+adapter in flight. Self-signals target the known current CI harness process under
+installed cooperative handlers, not any PTY or the VM's tool API. The sender is
+disarmed/joined before restoring handlers. Only the original owning context cleans
+up its child handles. All five cases share one harness so a failure/uncertainty
+stops later cases rather than relying on ordering of independent Nix derivations.
+
+Each case has a 40-second elapsed/admission threshold; the harness has a
+600-second elapsed/admission threshold (checked between cases, not a watchdog). Inner fixtures self-return within 8 seconds, and ordinary absolute
+process bounds remain in force. These are not forced whole-harness timeouts or unconditional OS reaping deadlines;
+the unchanged remote CI job limit is separate.
+Missing waits, ambiguous ownership, invalid acknowledgments or cleanup overruns
+fail qualification; skipped/unsupported is not pass. Per-case status and actual
+wait/ack ordering are retained in the check output and console evidence.
+
+The packaged live-writer success, EOF no-start and invalid-FD failure controls
+support functional wrapper passage only. They do not prove sole-writer/inode
+ownership, installed in-flight cancellation, this VM's external nix-root wrapper,
+or exec-tool PTY signal delivery. Those gates remain unqualified even if this
+remote subset passes. No outcome establishes old012 helper termination or permits
+trial resumption/replacement. No production fixture hook was introduced.
+
+The candidate-helper exporter also includes its newly required generic
+runtime/cancellation.py dependency. Pure isolated-import and missing-dependency
+negative-control tests exclude cached source modules and repository fallback;
+old frozen exports are not modified. Local validation of this follow-up is
+restricted to these guarded pure tests and static inspection. The fixture enable
+flag is an explicit check opt-in, not an authentication of runner location. The five real
+lifecycle cases are not executed locally while012 helper quiescence is unknown.
