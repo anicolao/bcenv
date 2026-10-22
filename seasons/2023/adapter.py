@@ -215,7 +215,11 @@ def replay_page(args):
     return _replay_query(args, paged=True)
 
 
-def _replay_query(args, *, paged):
+def replay_diagnostics(args):
+    return _replay_query(args, paged=True, diagnostics=True)
+
+
+def _replay_query(args, *, paged, diagnostics=False):
     # Validate before allocating output or launching a process.
     if not 0 <= args.round_start <= args.round_end <= 2147483647:
         raise ValueError('round bounds require 0 <= start <= end <= 2147483647')
@@ -233,6 +237,8 @@ def _replay_query(args, *, paged):
             raise ValueError('page round span exceeds 256')
         if not 0 <= args.record_offset <= 5000000:
             raise ValueError('record offset must be between 0 and 5000000')
+    if diagnostics and (type(args.own_team_id) is not int or args.own_team_id not in (1, 2)):
+        raise ValueError("own team must be 1 or 2")
     replay = Path(args.replay).resolve()
     if not replay.is_file() or replay.stat().st_size > 64 * 1024 * 1024:
         raise ValueError('replay must be a regular file no larger than 64 MiB')
@@ -242,23 +248,27 @@ def _replay_query(args, *, paged):
         raise ValueError('Pinned replay classes are missing')
     before = digest(replay)
     out = new_output(args.output)
-    command = [rt['BCENV_JAVA'], '-Xmx512m', '-cp', cp, 'ReplayQuery']
-    if paged:
+    command = [rt['BCENV_JAVA'], '-Xmx512m', '-cp', cp, 'OwnDiagnostics' if diagnostics else 'ReplayQuery']
+    if paged and not diagnostics:
         command.append('--page')
     command.extend([str(replay), str(args.round_start), str(args.round_end),
-                    'all' if args.robot_id is None else str(args.robot_id), str(args.limit)])
+                    ('-1' if diagnostics else 'all') if args.robot_id is None else str(args.robot_id), str(args.limit)])
     if paged:
         command.append(str(args.record_offset))
+    if diagnostics:
+        command.append(str(args.own_team_id))
     process = execute(command, out / 'replay-query.json', args.timeout, stderr=out / 'replay-query.log', **deadline_options(args))
-    result = {'schema': VERSION, 'kind': 'replay-page' if paged else 'replay-query', 'season': '2023',
+    result = {'schema': VERSION, 'kind': 'own-diagnostics' if diagnostics else ('replay-page' if paged else 'replay-query'), 'season': '2023',
         'engine_sha256': digest(rt['BCENV_ENGINE_JAR']),
         'replay': {'path': str(replay), 'sha256': before}, 'process': process,
         'status': 'timeout' if process['status'] == 'timeout' else 'failed'}
     try:
         query = json.loads((out / 'replay-query.json').read_text())
-        if (process['status'] == 'succeeded' and query.get('format') == ('bcenv.bc2023.replay-query.v2' if paged else 'bcenv.bc2023.replay-query.v1')
+        if (process['status'] == 'succeeded' and query.get('format') == ('bcenv.bc2023.own-diagnostics-query.v1' if diagnostics else ('bcenv.bc2023.replay-query.v2' if paged else 'bcenv.bc2023.replay-query.v1'))
                 and query.get('status') == 'complete' and query.get('source_replay', {}).get('sha256') == before
-                and (not paged or _page_receipt_matches(query, args))):
+                and (not paged or _page_receipt_matches(query, args))
+                and (not diagnostics or (type(query.get('query', {}).get('own_team_id')) is int
+                    and query['query']['own_team_id'] == args.own_team_id))):
             result['status'] = 'completed'
             result['truncated'] = query['truncated']
     except (ValueError, UnicodeError, AttributeError) as error:
@@ -331,6 +341,17 @@ def main():
     p.add_argument('--output', required=True)
     p.add_argument('--timeout', type=int, default=120)
     p.set_defaults(fn=replay_page)
+    p = replay_sub.add_parser('diagnostics', help='trusted own-team diagnostic page; not raw logs')
+    p.add_argument('--replay', required=True)
+    p.add_argument('--round-start', required=True, type=int)
+    p.add_argument('--round-end', required=True, type=int)
+    p.add_argument('--robot-id', type=int)
+    p.add_argument('--record-offset', required=True, type=int)
+    p.add_argument('--own-team-id', required=True, type=int, choices=[1, 2])
+    p.add_argument('--limit', type=int, default=64)
+    p.add_argument('--output', required=True)
+    p.add_argument('--timeout', type=int, default=120)
+    p.set_defaults(fn=replay_diagnostics)
     # Only leaf commands execute work. The same absolute monotonic clock value
     # is forwarded unchanged to every sequential compiler/engine/query process.
     leaves = [sub.choices[name] for name in ('build', 'run', 'package')]

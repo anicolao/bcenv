@@ -123,3 +123,5 @@ boolean record that `wait()` returned. These application observations are not
 exact OS process-spawn or signal-delivery timestamps. Refused launches are
 explicitly marked `not_started` and never claim a reaped child. Legacy runtime
 calls without the deadline flag retain their existing receipt format.
+
+Own-team indicator/bytecode mode: see [OWN-TEAM-DIAGNOSTICS.md](OWN-TEAM-DIAGNOSTICS.md).

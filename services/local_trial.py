@@ -25,6 +25,7 @@ from services.public_finalist import FinalistValidation, FINALIST_ERRORS
 from services.scrimmage import accept_source_zip, SubmissionRejected
 from services.replay_feedback_v2 import ReplayPageQuery, project_replay_feedback_page
 from services.replay_feedback import FeedbackLimits
+from services.own_diagnostics import project_own_diagnostics
 
 SCHEMA = 'bcenv.local-trial.v1'
 ID = re.compile(r's_[0-9a-f]{32}\Z')
@@ -148,7 +149,9 @@ class AdapterWorker:
                 'games': games, 'wins': sum(g['outcome'] == 'win' for g in games),
                 'losses': sum(g['outcome'] == 'loss' for g in games)}
 
-    def replay(self, root, submission_id, game_index, query, expected_replay_sha256):
+    def replay(self, root, submission_id, game_index, query, expected_replay_sha256, *, mode="actions"):
+        if mode not in ('actions', 'own_diagnostics'):
+            raise ValueError('invalid_query')
         game = self.games[game_index]
         match = root / ('game-' + str(game_index))
         result = read_json(match / 'result.json')
@@ -158,9 +161,11 @@ class AdapterWorker:
         if digest(replay_path) != expected_replay_sha256:
             raise ValueError('replay_changed')
         out = root / ('query-' + uuid.uuid4().hex)
-        args = ['replay', 'page', '--replay', str(match / 'replay.bc23'), '--round-start', str(query.round_start),
+        args = ['replay', 'diagnostics' if mode == 'own_diagnostics' else 'page', '--replay', str(match / 'replay.bc23'), '--round-start', str(query.round_start),
                 '--round-end', str(query.round_end), '--record-offset', str(query.record_offset),
                 '--limit', str(query.record_limit), '--output', str(out)]
+        if mode == 'own_diagnostics':
+            args += ['--own-team-id', '1' if game.own_slot == 'A' else '2']
         if query.robot_id is not None:
             args += ['--robot-id', str(query.robot_id)]
         if not self.invoke(root, out.name, args):
@@ -171,7 +176,8 @@ class AdapterWorker:
         raw = query_path.read_bytes()
         if digest(replay_path) != expected_replay_sha256:
             raise ValueError('replay_changed')
-        projected = project_replay_feedback_page(raw, submission_id=submission_id,
+        projector = project_own_diagnostics if mode == "own_diagnostics" else project_replay_feedback_page
+        projected = projector(raw, submission_id=submission_id,
                       job_id='j_' + submission_id[2:], own_team_id=1 if game.own_slot == 'A' else 2,
                       expected_spec_version=self.spec_version, expected_query=query,
                       limits=FeedbackLimits(max_records=128, max_output_encoded_bytes=32768))
@@ -387,9 +393,14 @@ class LocalTrial:
                         record['games'][index].get('status') != 'completed'):
                     raise ValueError('replay_unavailable')
                 q = request['query']
-                if type(q) is not dict or set(q) != {'round_start', 'round_end', 'robot_id', 'record_offset', 'record_limit'}:
+                if type(q) is not dict or set(q) not in (
+                        {'round_start', 'round_end', 'robot_id', 'record_offset', 'record_limit'},
+                        {'round_start', 'round_end', 'robot_id', 'record_offset', 'record_limit', 'mode'}):
                     raise ValueError('invalid_query')
-                query = ReplayPageQuery(**q)
+                mode = q.get("mode", "actions")
+                if type(mode) is not str or mode not in ("actions", "own_diagnostics"):
+                    raise ValueError("invalid_query")
+                query = ReplayPageQuery(**{key: value for key, value in q.items() if key != "mode"})
                 if query.record_limit > 128:
                     raise ValueError('invalid_query')
                 self.replays += 1
@@ -398,7 +409,8 @@ class LocalTrial:
                 try:
                     replay_worker = self.finalist.worker if self.finalist and sid in self.finalist.validation_ids.values() else self.worker
                     response = replay_worker.replay(self.root / sid, sid, index, query,
-                                                  record['games'][index]['replay_sha256'])
+                                                  record['games'][index]['replay_sha256'],
+                                                  **({'mode': mode} if mode == 'own_diagnostics' else {}))
                 except Exception:
                     self.halted = True
                     self.audit('halt', {'reason': 'replay_failure', 'submission_id': sid, 'game_index': index})
