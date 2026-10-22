@@ -9,11 +9,13 @@ import argparse
 import base64
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 import stat
+import signal
 from pathlib import Path
 import re
 import threading
@@ -21,6 +23,7 @@ import time
 import uuid
 
 from runtime.artifacts import execute, digest
+from runtime.cancellation import Cancellation, cancelled
 from services.public_finalist import FinalistValidation, FINALIST_ERRORS
 from services.trial_profiles import UNSET, CONTINUITY, resolve_profile, trial_options
 from services.storage_guard import StorageGuard
@@ -80,6 +83,9 @@ class AdapterWorker:
 
     def invoke(self, root, name, arguments, multiplier=1):
         checkpoint = getattr(self, 'storage_checkpoint', lambda stage: None)
+        token = getattr(self, 'cancellation', None)
+        if token is not None and cancelled(token.read_fd):
+            raise ValueError('run_halted')
         checkpoint('adapter_before')
         # Adapter subcommands have their own per-process wall timeouts. Outer
         # limit covers its bounded sequential processes, not aggregate resources.
@@ -93,10 +99,27 @@ class AdapterWorker:
             # child. Do not kill it first: allow bounded child-reaping/log grace.
             outer_timeout = remaining + 5
             arguments = arguments + ['--deadline-monotonic', str(self.deadline_monotonic)]
+        ack = root / (name + '.cleanup-' + uuid.uuid4().hex + '.json') if token is not None else None
+        if token is not None:
+            arguments = arguments + ['--cancel-fd', str(token.read_fd), '--cleanup-ack', str(ack)]
+        ownership = {}
         try:
             result = execute(self.command + arguments + ['--timeout', str(timeout)],
-                             root / (name + '.log'), outer_timeout)
+                             root / (name + '.log'), outer_timeout,
+                             **({'cancel_fd': token.read_fd, 'cooperative_child': True,
+                                 'on_interrupt': self.cancel_trial, 'ownership': ownership} if token is not None else {}))
         finally:
+            if ack is not None and not ownership.get('not_started'):
+                try:
+                    if not ownership.get('direct_child_wait_completed'):
+                        raise ValueError('outer_child_wait_unverified')
+                    evidence = read_json(ack)
+                    if evidence != {'schema': 'bcenv.cooperative-cleanup.v1',
+                                    'direct_child_waits_completed': True,
+                                    'scope': 'normal adapter return only; not descendant containment'}:
+                        raise ValueError('invalid_cleanup_ack')
+                except (OSError, ValueError):
+                    self.cleanup_unverified = True
             checkpoint('adapter_after')
         return result['exit_code'] == 0
 
@@ -222,13 +245,28 @@ class LocalTrial:
         self.mailbox_attempts = 0
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1)
+        self.close_lock = threading.Lock()
+        self.cleanup_complete = False
         self.closed = False
         self.halted = False
         self.finalist = None
         self.storage_guard = StorageGuard(self.root) if self.profile == CONTINUITY else None
         self.worker.storage_checkpoint = self.storage_checkpoint
         self.finalist = FinalistValidation(self, validation_games, self.profile_bounds['max_run_seconds']) if validation_games is not None else None
-        self.storage_checkpoint('initialization')
+        self.cancellation = Cancellation()
+        self.worker.cancellation = self.cancellation
+        self.worker.cancel_trial = self.cancel
+        self.worker.cleanup_unverified = False
+        if self.finalist:
+            self.finalist.worker.cancellation = self.cancellation
+            self.finalist.worker.cancel_trial = self.cancel
+            self.finalist.worker.cleanup_unverified = False
+        try:
+            self.storage_checkpoint('initialization')
+        except BaseException:
+            self.cancellation.close()
+            self.executor.shutdown(wait=True, cancel_futures=True)
+            raise
 
     def usage_snapshot(self):
         """Actual debits, under the same lock as admission; not inferred successes."""
@@ -521,18 +559,33 @@ class LocalTrial:
                 return result
             raise ValueError('invalid_request')
 
-    def close(self):
+    def cancel(self):
+        # Same lock as dispatch admission: fence before signaling the trusted chain.
         with self.lock:
-            self.closed = True
-        self.executor.shutdown(wait=True)
-        if self.finalist and self.finalist.final_choice is None:
-            with self.lock:
-                self.halted = True
-                self.finalist.phase = 'halted'
-                try:
-                    self.finalist.event('trial_closed', self.finalist.state())
-                except OSError:
-                    pass
+            self.closed = self.halted = True
+            self.cancellation.cancel()
+
+    def close(self):
+        with self.close_lock:
+            if self.cleanup_complete:
+                return
+            try:
+                self.cancel()
+            finally:
+                # Never let marker/audit persistence bypass worker joining.
+                self.executor.shutdown(wait=True, cancel_futures=True)
+            workers = [self.worker] + ([self.finalist.worker] if self.finalist else [])
+            if any(getattr(worker, 'cleanup_unverified', False) for worker in workers):
+                raise ValueError('cooperative_cleanup_unverified')
+            self.cancellation.close()
+            self.cleanup_complete = True
+            if self.finalist and self.finalist.final_choice is None:
+                with self.lock:
+                    self.finalist.phase = 'halted'
+                    try:
+                        self.finalist.event('trial_closed', self.finalist.state())
+                    except OSError:
+                        pass
 
 
 def make_server(trial, port=0):
@@ -633,7 +686,7 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
     processed = 0
     seen = set()
     try:
-        while (processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
+        while (not trial.closed and processed < max_requests and time.monotonic() < deadline and not (stop and stop.is_set()) and
                (trial.profile != CONTINUITY or not trial.halted) and
                (trial.finalist is None or trial.finalist.remaining_seconds() > 0)):
             # Revalidate fixed directories each iteration; never follow replacement links.
@@ -697,11 +750,41 @@ def serve_mailbox(trial, mailbox, *, stop=None, max_requests=UNSET, max_seconds=
             if not handled:
                 time.sleep(.05)
     finally:
-        trial.halted = True
-        (mailbox / 'stopped.json').write_bytes(encoded({'schema': SCHEMA, 'processed': processed,
-            **({'dispatch_attempts': trial.requests, 'usage': trial.usage_snapshot()}
-               if trial.profile == CONTINUITY else {})}))
-        trial.close()
+        finish_mailbox(trial, mailbox, processed)
+
+
+@contextmanager
+def cooperative_signals(trial):
+    """Voluntary main-thread signals; no death/transport containment guarantee."""
+    previous = {}
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous[signum] = signal.signal(signum, lambda number, frame: trial.cancel())
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def finish_mailbox(trial, mailbox, processed):
+    """Publish only after voluntary cleanup; disk failure never bypasses close."""
+    trial.close()
+    # Not a certificate of global absence or supervisor-death containment.
+    receipt = encoded({'schema': SCHEMA, 'processed': processed,
+        'cleanup_scope': 'cooperative workers joined; normal adapter direct-child waits acknowledged',
+        'supervisor_death_containment': False,
+        **({'dispatch_attempts': trial.requests, 'usage': trial.usage_snapshot()}
+           if trial.profile == CONTINUITY else {})})
+    if len(receipt) > 4096:
+        raise ValueError('stop_receipt_limit')
+    temporary = mailbox / ('stopped.tmp-' + uuid.uuid4().hex)
+    try:
+        with temporary.open('xb') as handle:
+            if handle.write(receipt) != len(receipt):
+                raise OSError('short_stop_receipt_write')
+        os.replace(temporary, mailbox / 'stopped.json')
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def main():
@@ -719,7 +802,8 @@ def main():
         raise ValueError('continuity_requires_mailbox')
     trial = LocalTrial(args.root, worker, **options)
     if args.mailbox:
-        serve_mailbox(trial, args.mailbox)
+        with cooperative_signals(trial):
+            serve_mailbox(trial, args.mailbox)
         return
     server = make_server(trial, args.port)
     print(json.dumps({'endpoint': 'http://127.0.0.1:' + str(server.server_port) + '/v1', 'profile': 'cooperative-public-development'}), flush=True)

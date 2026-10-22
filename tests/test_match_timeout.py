@@ -23,7 +23,16 @@ class MatchTimeoutTests(unittest.TestCase):
 
     def invoke(self, worker, arguments, multiplier=1, name='operation'):
         before = list(arguments)
-        with patch('services.local_trial.execute', return_value={'exit_code': 0}) as execute:
+        def completed(command, output, timeout, **kwargs):
+            # A mocked adapter must model both outer wait and inner cleanup ack.
+            if 'ownership' in kwargs:
+                kwargs['ownership']['direct_child_wait_completed'] = True
+                ack = Path(command[command.index('--cleanup-ack') + 1])
+                ack.write_text(json.dumps({'schema': 'bcenv.cooperative-cleanup.v1',
+                    'direct_child_waits_completed': True,
+                    'scope': 'normal adapter return only; not descendant containment'}))
+            return {'exit_code': 0}
+        with patch('services.local_trial.execute', side_effect=completed) as execute:
             self.assertTrue(worker.invoke(self.root, name, arguments, multiplier))
         self.assertEqual(arguments, before, 'caller arguments must not be mutated')
         return execute.call_args.args

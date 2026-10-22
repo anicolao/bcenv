@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import subprocess
 import time
+from runtime.cancellation import cancelled
 
 VERSION = "bcenv.artifact.v1"
 
@@ -34,7 +35,8 @@ def write(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
 
-def execute(command, output, timeout, stderr=None, *, deadline_monotonic=None):
+def execute(command, output, timeout, stderr=None, *, deadline_monotonic=None, cancel_fd=None,
+            cooperative_child=False, on_interrupt=None, ownership=None):
     """Bound one process group; an optional same-host deadline spans many calls.
 
     Callers supervising this adapter must allow cleanup grace beyond the deadline
@@ -43,6 +45,12 @@ def execute(command, output, timeout, stderr=None, *, deadline_monotonic=None):
     if deadline_monotonic is not None and (type(deadline_monotonic) not in (int, float)
             or not math.isfinite(deadline_monotonic)):
         raise ValueError('deadline_monotonic must be a finite absolute monotonic time')
+    ownership = {} if ownership is None else ownership
+    def waited(proc, timeout=None):
+        code = proc.wait(timeout=timeout) if timeout is not None else proc.wait()
+        ownership["direct_child_wait_completed"] = True
+        return code
+
     start = time.monotonic()
     launch_error = None
     termination_requested = reaped = None
@@ -50,25 +58,79 @@ def execute(command, output, timeout, stderr=None, *, deadline_monotonic=None):
         log = stack.enter_context(Path(output).open('wb'))
         errors = stack.enter_context(Path(stderr).open('wb')) if stderr else subprocess.STDOUT
         launch_checked = time.monotonic() if deadline_monotonic is not None else None
-        not_started = launch_checked is not None and launch_checked >= deadline_monotonic
+        was_cancelled = cancelled(cancel_fd)
+        not_started = was_cancelled or (launch_checked is not None and launch_checked >= deadline_monotonic)
+        cutoff = min(start + timeout, deadline_monotonic) if deadline_monotonic is not None else start + timeout
+        proc = None
         try:
-            proc = None if not_started else subprocess.Popen(command, stdout=log, stderr=errors, start_new_session=True)
-        except OSError as error:
-            proc = None
-            launch_error = str(error)
-        try:
-            wait_timeout = timeout if deadline_monotonic is None else min(timeout, max(0., deadline_monotonic - time.monotonic()))
-            code = proc.wait(timeout=wait_timeout) if proc else None
-            status = 'timeout' if not_started else ('succeeded' if code == 0 else 'failed')
+            try:
+                proc = None if not_started else subprocess.Popen(command, stdout=log, stderr=errors, start_new_session=True,
+                    **({"pass_fds": (cancel_fd,)} if cooperative_child and cancel_fd is not None else {}))
+            except OSError as error:
+                launch_error = str(error)
+            ownership["not_started"] = proc is None
+            if proc is None:
+                code = None
+                status = 'cancelled' if was_cancelled else ('timeout' if not_started else 'failed')
+            elif cancel_fd is None:
+                wait_timeout = timeout if deadline_monotonic is None else min(timeout, max(0., deadline_monotonic - time.monotonic()))
+                code = waited(proc, timeout=wait_timeout)
+                status = 'succeeded' if code == 0 else 'failed'
+            else:
+                while True:
+                    if cancelled(cancel_fd):
+                        if not was_cancelled:
+                            was_cancelled = True
+                            if cooperative_child:
+                                # Let the trusted adapter reap its own detached children.
+                                cutoff = min(cutoff, time.monotonic() + 5.)
+                        if not cooperative_child:
+                            status = 'cancelled'
+                            break
+                    remaining = cutoff - time.monotonic()
+                    if remaining <= 0:
+                        status = 'timeout'
+                        break
+                    try:
+                        code = waited(proc, timeout=min(.1, remaining))
+                        status = 'succeeded' if code == 0 else 'failed'
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                if status in ('timeout', 'cancelled'):
+                    termination_requested = time.monotonic()
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    code = waited(proc)
         except subprocess.TimeoutExpired:
-            if deadline_monotonic is not None:
-                termination_requested = time.monotonic()
-            os.killpg(proc.pid, signal.SIGKILL)
-            code = proc.wait()
+            termination_requested = time.monotonic()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            code = waited(proc)
             status = 'timeout'
         except BaseException:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
+            if cooperative_child and on_interrupt is not None:
+                on_interrupt()
+            if proc is not None and not ownership.get("direct_child_wait_completed"):
+                if cooperative_child and on_interrupt is not None:
+                    try:
+                        waited(proc, timeout=5.)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        waited(proc)
+                else:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    waited(proc)
             raise
         if deadline_monotonic is not None and proc is not None:
             reaped = time.monotonic()
