@@ -82,6 +82,8 @@ def main(argv=None):
     create.add_argument('--config', required=True);create.add_argument('--paths', required=True)
     create.add_argument('--author', required=True)
     create.add_argument('--identity-output', required=True)
+    create.add_argument('--public-retention', action='store_true',
+                        help='Bind the operator-only public retention gate at initialization')
     for name in ('serve','advance','recover','inspect','receipt'):
         p=sub.add_parser(name);p.add_argument('--authority-id',required=True);p.add_argument('--config-digest',required=True)
         if name in ('serve','advance','recover'):p.add_argument('--epoch',type=int,required=True)
@@ -91,11 +93,17 @@ def main(argv=None):
     args=parser.parse_args(argv)
     if args.operation=='initialize':
         config,paths=read(args.config),read(args.paths)
+        inputs=fixed_inputs(config)
+        if args.public_retention and 'retention' not in config:
+            config=dict(config,retention=dict(schema='public-retention-v1',
+                fixed_inputs_sha256=hashlib.sha256(canonical(inputs)).hexdigest(),repository_id=1431035719))
+            if fixed_inputs(config) != inputs:
+                raise ValueError('retention_fixed_inputs_changed')
         fresh_paths(paths,initial=True)
         database=Path(args.authority).absolute()
         if any(Path(p)==database or Path(p) in database.parents for p in paths.values()):
             raise ValueError('authority_must_be_outside_epoch_roots')
-        bound={'trial':config,'inputs':fixed_inputs(config),'implementation':implementation(),
+        bound={'trial':config,'inputs':inputs,'implementation':implementation(),
                'runtime_environment':runtime_environment()}
         authority=ResumableAuthority.create(database,profile=config['profile'],config=bound,
                     author=args.author,paths=paths,clock=clock)

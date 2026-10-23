@@ -66,12 +66,19 @@ def fixed_inputs(config):
     """Hash trusted public schedule/config outside every authoritative transaction."""
     base_keys = {'profile','command','games','validation_games','timeout','match_timeout'}
     transfer = type(config) is dict and config.get('profile') == TRANSFER_PROFILE
-    expected_keys = base_keys | ({'transfer_games','transfer_schedule_sha256','transfer_selection'} if transfer else set())
+    retention = type(config) is dict and 'retention' in config
+    expected_keys = base_keys | ({'retention'} if retention else set()) | ({'transfer_games','transfer_schedule_sha256','transfer_selection'} if transfer else set())
     if (type(config) is not dict or set(config) != expected_keys or
             config['profile'] not in (PROFILE, TRANSFER_PROFILE) or config['timeout'] != 120 or config['match_timeout'] != 300 or
             type(config['command']) is not list or len(config['command']) != 1 or
             not Path(config['command'][0]).is_absolute()):
         raise ValueError('invalid_resumable_config')
+    if retention:
+        policy = config['retention']
+        if (type(policy) is not dict or set(policy) != {'schema','fixed_inputs_sha256','repository_id'} or
+                policy['schema'] != 'public-retention-v1' or type(policy['repository_id']) is not int or
+                policy['repository_id'] != 1431035719 or type(policy['fixed_inputs_sha256']) is not str):
+            raise ValueError('invalid_retention_config')
     schedules = []
     files = {config['command'][0]: digest(config['command'][0])}
     for key in ('games','validation_games') + (('transfer_games',) if transfer else ()):
@@ -108,6 +115,8 @@ def fixed_inputs(config):
         if {str(Path(p).resolve()) for p in selected} != {x[1] for x in schedules[2]}:
             raise ValueError('transfer_selection_schedule_mismatch')
         files[selection['path']] = digest(selection['path'])
+    if retention and config['retention']['fixed_inputs_sha256'] != hashlib.sha256(canonical(files)).hexdigest():
+        raise ValueError('retention_fixed_inputs_changed')
     return files
 
 
@@ -224,6 +233,7 @@ class ResumableTrial:
         self.paths = paths_for(snap, epoch)
         bound = json.loads(snap['run']['config'])['config']
         self.config, self.inputs = bound['trial'], bound['inputs']
+        self.retention_enabled = 'retention' in self.config
         if fixed_inputs(self.config) != self.inputs:
             raise ValueError('public_input_changed')
         self.root, self.artifacts = Path(self.paths['service']), Path(self.paths['artifacts'])
@@ -269,6 +279,9 @@ class ResumableTrial:
         snap = self.authority.current_state()
         ok = (snap['run']['epoch'] == self.epoch and snap['run']['state'] == 'ACTIVE' and
               not snap['meta']['halted'] and not snap['control']['closed'])
+        if self.retention_enabled:
+            gate = snap['retention']
+            ok = ok and gate['enabled'] and not gate['failed'] and not gate['terminal']
         if not ok:
             self.request_cancel()
         return ok
@@ -359,12 +372,48 @@ class ResumableTrial:
         self.storage_checkpoint('request_after')
         return response
 
+    def _start_retained_batch(self, sid):
+        """Wait before accepted work starts, never inside a SQL transaction.
+
+        Pending is not a failed game. All exits preserve the accepted ID/debit
+        for ordinary close/UNKNOWN handling. No clock or process is created here.
+        """
+        try:
+            while not self.stop_requested.is_set():
+                remaining = self.remaining_seconds()
+                if remaining <= 0 or not self.current_epoch_active():
+                    self.request_cancel()
+                    return False
+                gate = self.authority.retention_gate(self.epoch)
+                if not gate['enabled'] or gate['failed'] or gate['terminal']:
+                    self.request_cancel()
+                    return False
+                if gate['pending']:
+                    self.stop_requested.wait(min(.1, self.remaining_seconds()))
+                    continue
+                try:
+                    self.authority.start_batch(self.epoch, identifier('start'), sid)
+                    return True
+                except AuthorityDenied as error:
+                    if error.code != 'retention_pending':
+                        raise
+                    # A checkpoint committed after our read-only observation.
+                    # The failed transition rolled back; no work was started.
+                    self.stop_requested.wait(min(.1, self.remaining_seconds()))
+        except BaseException:
+            self.request_cancel()
+            return False
+        return False
+
     def _batches(self, ids):
         for sid in ids:
             if self.stop_requested.is_set():
                 return
+            if self.retention_enabled and not self._start_retained_batch(sid):
+                return
             try:
-                self.authority.start_batch(self.epoch, identifier('start'), sid)
+                if not self.retention_enabled:
+                    self.authority.start_batch(self.epoch, identifier('start'), sid)
                 batch = self.authority.batch(sid)
                 root = self.artifacts/sid
                 root.mkdir(exist_ok=False)
