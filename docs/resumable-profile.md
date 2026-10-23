@@ -189,3 +189,37 @@ by this document. Existing standard remote CI may run its unchanged fixtures
 only after independent review/publication authorization. Actual installed/Nix
 integration, normal stop, interrupted transport and same-author provisioning
 remain unqualified for this new profile until separately authorized evidence.
+
+
+## One authorized inert integration (2026-10-23)
+
+An independently audited single execution passed at00:54:37–00:54:39 UTC using
+source `4c4678087e5379d9abd1fbd0380694c927f7a830`, unchanged installed runtime
+`/nix/store/0azcmfv2bqdbm6ijgkz1rpbsqw829hmy-bcenv-2023-0.1.0`, and a synthetic
+adapter/finite Python child. Both service owners returned normally; there were
+six committed RPCs, one epoch CAS, no retries/tool signals and **zero games**.
+The active child was cancelled after readiness, directly waited/reaped and
+acknowledged before the old owner joined. Stale finalization was rejected with
+identical authoritative before/after snapshots. The batch remained UNKNOWN;
+original authority, accounting and six-hour deadlines were conserved. Final
+counters were mailbox6, reads3, notes1, versions1 and zero games/replays.
+
+Recovery restored exact committed neutral source, note, checkpoint and original
+receipts, excluding uncommitted markers/incomplete artifacts. A charged new-epoch
+receipt read returned the original admission unchanged. One operator stop closed
+the current owner normally without changing counters/deadlines. This case had no
+COMPLETE batch: it does **not** qualify completed-game copying, production-engine
+cancellation, packaged production CLI, candidate/native continuity, global process
+absence or old012/013 helper quiescence. It authorizes no trial launch.
+
+Retained local evidence commitments (SHA256; no raw execution payload published):
+
+- Final plan: `e4e05ed8d5a8c0f6ae55ac5a5a474254ff64faad02a6cb29783891f4b4a024f4`.
+- Input manifest: `da92d6758c19200312bf4d6ef0912cb5e18cae6bc17d08763a0dee66b41936c8`.
+- Static review: `9002c42d86d42c5a9deeda6716c926eb75abe74c977ede60f9f149dcf5f8b83c`.
+- Execution receipt: `824fb03d61641d94021300571c818e7b8a88ede32be0ea2310bbeb057ff63357`.
+- Final fixture receipt: `b89ea746a21559e6f1cad99a65ba73c9560f5a9fd0253002bb0f92df4d505015`.
+- Independent result review: `c74eae738e1ca4055a8ff36dd3deecc4a4f9371ad08b95a651f7edadb2c29027`.
+
+The preceding qualification limits remain applicable outside this exact inert
+composition. Existing remote CI coverage is separate from this one-case result.
