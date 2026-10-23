@@ -223,3 +223,40 @@ Retained local evidence commitments (SHA256; no raw execution payload published)
 
 The preceding qualification limits remain applicable outside this exact inert
 composition. Existing remote CI coverage is separate from this one-case result.
+
+
+## One authorized public complete-artifact recovery (2026-10-23)
+
+A separate single authorized infrastructure execution passed at01:04:12–01:08:24
+UTC with unchanged source `4c4678087e5379d9abd1fbd0380694c927f7a830` and installed
+0azcm runtime above. One public tutorial submission completed eight training
+games; all eight result summaries/replay hashes matched fixed public references.
+Four action/own-diagnostic projections across both slots matched reference
+feedback except the preregistered top-level ID substitution. No validation games,
+selection or evaluator activity occurred.
+
+The audit verified35 canonical RPCs (33 reads, including23 polls), one note,
+one version and four replay admissions; no accepted-ID resend or retries.
+Fourteen adapter cleanup acknowledgments and22 successful direct-child receipts
+were retained, all reaped before the single clean epoch CAS. Exactly449 committed
+manifest files were copied and independently hash-equal, with no extra restored
+artifact files. Committed source, notes, original receipts and four feedback
+references were preserved; uncommitted workspace markers were excluded and fresh
+active source/tests remained empty. Original authority/author/domain, counters
+and wall/monotonic deadlines were conserved; remaining time decreased. One
+operator stop closed the new owner normally; both owners returned without cleanup
+errors, and no post-CAS workload ran beyond final status.
+
+This qualifies the exact public `ResumableTrial/run_service`, mailbox/SQL and
+installed adapter composition, COMPLETE-artifact recovery and normal idle stop.
+It does **not** exercise `launch_resumable_trial.main`, in-flight engine
+cancellation, native competitor restoration/continuity, global descendant
+containment or old012/013 cleanup; it is not candidate-launch authorization.
+
+Retained local SHA256 commitments (summary only): prepared manifest
+`77fbf7abd81e5022fe7a2e22a17f14e77db5582fe760fb1e23b7e0861c9167d5`;
+static review `6cb0e4dccf16950579ab1d37bed6cb98a0c1512bf1b7b3de9012266562b2abf5`;
+execution `bd154b4ad149fce23c0fa1ebc7659f8dfe5283a35142e660263c808beb203493`;
+final receipt `a3226cd7f7cce93f548b88bc609f8dab9edeb2a487a75dab222b07189b0033fd`;
+independent result review
+`5ce923d535fccdff73c02a60ecdaeb91a317e28ab5f4fdcd6060384343111695`.
