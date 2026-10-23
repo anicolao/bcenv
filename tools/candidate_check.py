@@ -33,7 +33,12 @@ def execute(command, output, timeout, stderr=None):
     command = list(command)
     # This runner is used only for pinned Java compiler/runtime commands.
     command.insert(1, '-J-Xmx256m' if Path(command[0]).name == 'javac' else '-Xmx256m')
-    result = {'command': command, 'exit_code': None, 'status': 'failed', 'log': Path(output).name}
+    result = {'command': command, 'exit_code': None, 'status': 'failed', 'log': Path(output).name,
+              'requested_timeout_seconds': timeout, 'direct_child_started': False,
+              'direct_child_wait': {'completed': False, 'exit_code': None},
+              'group_cleanup': {'attempted': False, 'outcome': 'not_started'},
+              'stdout_close': {'completed': False}}
+    cleanup_failed = False
     with Path(output).open('xb') as log:
         try:
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -43,6 +48,7 @@ def execute(command, output, timeout, stderr=None):
         except OSError as error:
             result['launch_error'] = str(error)
         else:
+            result['direct_child_started'] = True
             count = 0
             status = None
             try:
@@ -70,18 +76,67 @@ def execute(command, output, timeout, stderr=None):
                             process.wait(timeout=remaining)
                         except subprocess.TimeoutExpired:
                             status = 'timeout'
+            except Exception as error:
+                status = 'failed'
+                result['execution_error'] = str(error)
             finally:
-                # Also clean up cooperative children that retain inherited pipes.
+                # Independent cleanup attempts: a failed group signal must not skip
+                # waiting for our direct child. This is not descendant containment.
+                pending_interrupt = None
+                result['group_cleanup']['attempted'] = True
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
+                    result['group_cleanup']['outcome'] = 'signal_sent'
                 except ProcessLookupError:
-                    pass
-                process.wait()
-                process.stdout.close()
+                    result['group_cleanup']['outcome'] = 'group_not_found'
+                except BaseException as error:
+                    if not isinstance(error, Exception):
+                        pending_interrupt = error
+                    cleanup_failed = True
+                    result['group_cleanup'].update(outcome='error', error=str(error))
+                wait_start = time.monotonic()
+                try:
+                    waited_code = process.wait()
+                    result['direct_child_wait'].update(completed=True, exit_code=waited_code)
+                except BaseException as error:
+                    if not isinstance(error, Exception):
+                        pending_interrupt = pending_interrupt or error
+                    cleanup_failed = True
+                    result['direct_child_wait']['error'] = str(error)
+                finally:
+                    result['direct_child_wait']['elapsed_seconds'] = round(time.monotonic() - wait_start, 6)
+                    try:
+                        process.stdout.close()
+                        result['stdout_close']['completed'] = True
+                    except BaseException as error:
+                        if not isinstance(error, Exception):
+                            pending_interrupt = pending_interrupt or error
+                        cleanup_failed = True
+                        result['stdout_close']['error'] = str(error)
+                if pending_interrupt is not None:
+                    raise pending_interrupt
             result['exit_code'] = process.returncode
-            result['status'] = status or ('succeeded' if process.returncode == 0 else 'failed')
+            result['status'] = 'failed' if cleanup_failed else (status or ('succeeded' if process.returncode == 0 else 'failed'))
+            if cleanup_failed:
+                result['cleanup_failed'] = True
+    result['owned_cleanup_verified'] = (result['direct_child_started'] and
+                                        result['direct_child_wait']['completed'] and
+                                        result['stdout_close']['completed'] and
+                                        result['group_cleanup']['outcome'] in ('signal_sent', 'group_not_found'))
     result.update(elapsed_seconds=round(time.monotonic() - start, 3), log_sha256=digest(output))
     return result
+
+
+def caller_receipt(args, code):
+    """Record caller input and a prepared return, not external terminal proof."""
+    names = ('command', 'workspace', 'source', 'package', 'build', 'tests',
+             'main_class', 'output', 'timeout')
+    return {'invocation': {'argv': getattr(args, 'caller_argv', None),
+                           'effective_options': {name: getattr(args, name)
+                                                 for name in names if hasattr(args, name)}},
+            'helper_return_prepared': {'exit_code': code,
+                                      'external_terminal_observed': False,
+                                      'scope': 'receipt prepared before return; external helper/tool terminal observation required'}}
 
 
 def build(args):
@@ -99,6 +154,7 @@ def build(args):
                'compile_status': steps[0]['status'] if steps else 'not_run',
                'official_verifier_status': steps[1]['status'] if len(steps) > 1 else 'not_run',
                'artifact': str(out / 'artifact.json'), 'artifact_sha256': digest(out / 'artifact.json')}
+    summary.update(caller_receipt(args, code))
     write(out / 'check.json', summary)
     return summary, code
 
@@ -163,8 +219,10 @@ def test(args):
         adapter.load_build(build_path, rt['BCENV_ENGINE_JAR'])
     except (ValueError, OSError, KeyError):
         result.update(status='failed', reason='input_build_changed')
+    code = 0 if result['status'] == 'execution_succeeded' else 1
+    result.update(caller_receipt(args, code))
     write(out / 'check.json', result)
-    return result, 0 if result['status'] == 'execution_succeeded' else 1
+    return result, code
 
 
 def main(argv=None, workspace=None):
@@ -186,7 +244,9 @@ def main(argv=None, workspace=None):
     for p in sub.choices.values():
         p.add_argument('--output', required=True)
         p.add_argument('--timeout', type=int, default=30)
-    args = parser.parse_args(argv)
+    caller_argv = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(caller_argv)
+    args.caller_argv = caller_argv
     if not 1 <= args.timeout <= 120:
         parser.error('timeout must be 1..120 seconds per phase')
     try:
@@ -199,6 +259,7 @@ def main(argv=None, workspace=None):
         result, code = args.fn(args)
     except (ValueError, OSError, KeyError) as error:
         result, code = {'schema': 'bcenv.candidate-check.v1', 'status': 'error', 'error': str(error)}, 2
+    result.update(caller_receipt(args, code))
     print(json.dumps(result, sort_keys=True))
     return code
 
