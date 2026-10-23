@@ -97,7 +97,7 @@ def main(argv=None):
             raise ValueError('authority_must_be_outside_epoch_roots')
         bound={'trial':config,'inputs':fixed_inputs(config),'implementation':implementation(),
                'runtime_environment':runtime_environment()}
-        authority=ResumableAuthority.create(database,profile=PROFILE,config=bound,
+        authority=ResumableAuthority.create(database,profile=config['profile'],config=bound,
                     author=args.author,paths=paths,clock=clock)
         snap=authority.inspect()
         publish(args.identity_output,dict(authority_id=authority.authority_id,
@@ -131,7 +131,7 @@ def main(argv=None):
         evidence=probe(bound['trial']['command'],trial.root/'adapter-probe.log',
                        timeout=min(30,remaining), deadline_monotonic=trial.deadline,
                        cancel_fd=trial.cancellation.read_fd)
-        publish(trial.root/'launch.json',dict(profile=PROFILE,authority_id=authority.authority_id,
+        publish(trial.root/'launch.json',dict(profile=bound['trial']['profile'],authority_id=authority.authority_id,
             epoch=args.epoch,implementation=implementation(),probe=evidence,config_digest=authority.config_digest))
         if evidence['status']!='succeeded':
             authority.halt(args.epoch,identifier('probe_failed'),'probe_failed')
