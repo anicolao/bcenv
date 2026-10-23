@@ -75,3 +75,38 @@ Independent actual-case review SHA256
 binds the retained observations. The second archived snapshot is pre-ACK PENDING;
 its later ACK and terminal logical close are separately local, not retroactively
 inside that commit. This self-reference limit is deliberate and remains visible.
+
+## Reconstruction and retained-smoke blocker (2026-10-23)
+
+Independent audits verified reconstructed public runtime0azcm bytes/NAR and
+retained closure-verification receipts, then public source/map/build identities.
+This makes those pinned inputs available again; it does not reconstruct missing
+old trial data or qualify end-to-end retained service/game execution, native continuity or
+old-helper cleanup. Runtime audit SHA256
+`a748828627297baaf9d49720a880ab00fccc43563737f044aa2be8f60dca9be9`;
+public input audit `793bd9954832eb9daf762244b31f45f04932cba11d831a0c9a806603f302c55c`.
+
+The subsequent retained-public-smoke001 and separately identified002 attempts
+remain incomplete with physical status UNKNOWN. Both encountered access-review
+denials on observation after launch. Each retained only a clone-start intent with
+no completed wait receipt; bounded known-path inspection found no service-ready,
+authority, approval, retained-export or terminal-result evidence. No game admission
+or publication is established by these records. Missing receipts are not proof of
+process death, failed authentication or absent surviving helpers.
+
+Both attempts are permanently retired: their exact export approvals will never
+be created. Under the reviewed unchanged control flow, initial independent approval,
+publication/readback and SQL ACK are required before games or further publication.
+This supplies a cooperative logical no-duplicate fence, not physical containment;
+a surviving clone could still permit initial service startup or resource contention.
+No denied poll, retry, signal, alternate upload or continuation is authorized by
+this documentation. Execution is paused pending the user's requested explicit
+exact-case approval for eight public games, four queries and three checkpoint
+publications. This is not a general lack of GitHub access or permission to create
+another candidate. No private payload is included.
+
+Interruption-review commitments:001
+`ae56b9df2a8e935a5457820d09ef93731f1fbacd005ddd1ca7b5346df4d558f2`;
+002 `5ce018d8de423e411acfbcc5c9f2b7d6bd85881dcb414afb301aa0685b5da2f8`.
+These are time-bounded observations and preserve both attempts and their denial
+history; later authorization or success would not retroactively establish cleanup.
