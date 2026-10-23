@@ -12,6 +12,7 @@ import uuid
 
 from services.epoch_authority import (EpochAuthority, AuthorityDenied, AuthorityUnavailable,
     PROFILE as CORE_PROFILE, MAX_EPOCHS, _json, _hash, _sha, _id, _paths, _disjoint)
+from services.public_retention_authority import PublicRetentionAuthority, validate_retention_config
 from services.scrimmage import accept_source_zip, SubmissionRejected
 from services.replay_feedback_v2 import ReplayPageQuery
 
@@ -112,7 +113,7 @@ def prepare(body):
         return {'error': 'invalid_query' if op == 'replay' else 'invalid_archive'}
 
 
-class ResumableAuthority(EpochAuthority):
+class ResumableAuthority(PublicRetentionAuthority, EpochAuthority):
     # Lifetime cap includes ingress, storage observations and work transitions.
     receipt_limit = 262144
 
@@ -145,6 +146,7 @@ class ResumableAuthority(EpochAuthority):
 
     @classmethod
     def create(cls, path, *, profile=PROFILE, config, author, paths, clock, duration=21600, limits=None):
+        validate_retention_config(config)
         if profile not in (PROFILE, TRANSFER_PROFILE):
             raise AuthorityDenied('invalid_profile')
         if profile == TRANSFER_PROFILE:
@@ -167,6 +169,7 @@ class ResumableAuthority(EpochAuthority):
                 if profile == TRANSFER_PROFILE:
                     db.execute('CREATE TABLE domain_transfers (batch TEXT PRIMARY KEY REFERENCES domain_batches(id), '
                                'effect TEXT NOT NULL UNIQUE, original_manifest_sha256 TEXT NOT NULL)')
+                obj._retention_initialize(db,db.execute('SELECT * FROM run WHERE id=1').fetchone())
                 db.commit()
         except BaseException:
             obj._failed = True
@@ -252,6 +255,8 @@ class ResumableAuthority(EpochAuthority):
                 transfer_slots_limit=2, transfer_games_reserved=8*db.execute('SELECT count(*) FROM domain_transfers').fetchone()[0],
                 transfer_games_admitted=db.execute("SELECT count(*) FROM domain_games g JOIN domain_transfers t ON g.batch=t.batch WHERE g.admitted=1").fetchone()[0],
                 training_games_accounting='ordinary admitted games plus transfer reserved games; not physical launches')
+        retention=self._retention_state(db,run)
+        if retention['enabled']:response['retention']=retention
         return response
 
     def request(self, epoch, request_id, body, *, attempt_id=None, prepared=None):
@@ -333,6 +338,7 @@ class ResumableAuthority(EpochAuthority):
             return (json.loads(prior['response']) if prior['response'] else dict(schema=SCHEMA,status='replay_pending',replay_id=body['replay_id'])),None
         if op == 'result' and set(body) == {'operation', 'submission_id'}:
             return json.loads(self._batch(db, body['submission_id'])['response']), None
+        self._retention_guard(db,run)
         if meta['phase']=='selected':
             raise AuthorityDenied('selection_complete')
         if meta['halted'] or db.execute('SELECT closed FROM domain_control WHERE id=1').fetchone()[0]:
@@ -465,6 +471,7 @@ class ResumableAuthority(EpochAuthority):
 
     def start_batch(self, epoch, transition_id, sid):
         def action(db,run):
+            self._retention_guard(db,run)
             if self._meta(db)['halted'] or db.execute('SELECT closed FROM domain_control WHERE id=1').fetchone()[0]:raise AuthorityDenied('run_halted')
             if db.execute("SELECT 1 FROM domain_batches WHERE epoch=? AND state='RUNNING'",(epoch,)).fetchone():raise AuthorityDenied('active_limit')
             changed=db.execute("UPDATE domain_batches SET state='RUNNING' WHERE id=? AND epoch=? AND state='QUEUED'",(sid,epoch)).rowcount
@@ -477,6 +484,7 @@ class ResumableAuthority(EpochAuthority):
     def before_game(self, epoch, transition_id, sid, index):
         if type(index) is not int or not 0<=index<8:raise AuthorityDenied('invalid_game')
         def action(db,run):
+            self._retention_guard(db,run)
             row=self._batch(db,sid)
             if self._meta(db)['halted'] or db.execute('SELECT closed FROM domain_control WHERE id=1').fetchone()[0] or row['epoch']!=epoch or row['state']!='RUNNING':raise AuthorityDenied('batch_not_running')
             existing=db.execute('SELECT state FROM domain_games WHERE batch=? AND game_index=?',(sid,index)).fetchone()
@@ -533,12 +541,14 @@ class ResumableAuthority(EpochAuthority):
                             db.execute("UPDATE domain_batches SET state='FAILED',response=? WHERE id=?",(_json(failed),vid))
                     db.execute("UPDATE domain_meta SET halted=1,phase='halted' WHERE id=1")
                 elif all(self._batch(db,v)['state']=='COMPLETE' for v in vids):db.execute("UPDATE domain_meta SET phase='complete' WHERE id=1")
+            self._retention_new(db,run,'batch')
             return dict(response=response)
         return self._transition(epoch,transition_id,'batch_finalize',dict(id=sid,result=result,manifest_sha256=manifest_sha),action)
 
     def finish_replay(self, epoch, transition_id, replay_id, feedback=None, *, error=None):
         feedback=json.loads(_json(feedback)) if feedback is not None else None
         def action(db,run):
+            if self._retention_state(db,run)['terminal']:raise AuthorityDenied('retention_terminal')
             replay=db.execute('SELECT * FROM domain_replays WHERE id=?',(replay_id,)).fetchone()
             if replay is None or replay['epoch']!=epoch or replay['state']!='RUNNING':raise AuthorityDenied('replay_not_running')
             if error is not None:
@@ -565,6 +575,7 @@ class ResumableAuthority(EpochAuthority):
 
     def halt(self, epoch, transition_id, reason='infrastructure_failure'):
         def action(db,run):
+            if self._retention_state(db,run)['terminal']:raise AuthorityDenied('retention_terminal')
             db.execute("UPDATE domain_meta SET halted=1,phase=CASE WHEN selected IS NULL THEN 'halted' ELSE phase END WHERE id=1")
             return dict(status='halted',reason=reason)
         return self._transition(epoch,transition_id,'halt',dict(reason=reason),action)
@@ -587,6 +598,7 @@ class ResumableAuthority(EpochAuthority):
     def advance(self, epoch, transition_id, paths):
         paths=_paths(paths)
         def action(db,run):
+            self._retention_guard(db,run)
             if self._meta(db)['phase']=='selected':raise AuthorityDenied('selection_complete')
             if epoch+1>=MAX_EPOCHS:raise AuthorityDenied('epoch_limit')
             old=[p for r in db.execute('SELECT paths FROM epochs') for p in json.loads(r[0]).values()]
@@ -607,6 +619,7 @@ class ResumableAuthority(EpochAuthority):
         _sha(proof_digest)
         verified=json.loads(_json(verified))
         def action(db,run):
+            self._retention_guard(db,run)
             if author!=run['author']:raise AuthorityDenied('author_mismatch')
             if self._meta(db)['phase']=='selected':raise AuthorityDenied('selection_complete')
             if self._meta(db)['halted']:raise AuthorityDenied('run_halted')
@@ -695,6 +708,7 @@ class ResumableAuthority(EpochAuthority):
         if type(size) is not int or size < 0 or error is not None and type(error) is not str:
             raise AuthorityDenied('invalid_storage_observation')
         def action(db,run):
+            if self._retention_state(db,run)['terminal']:raise AuthorityDenied('retention_terminal')
             db.execute('UPDATE domain_control SET max_storage=MAX(max_storage,?),last_storage=? WHERE id=1',(size,size))
             if error is not None or size > 1073741824:
                 db.execute("UPDATE domain_meta SET halted=1,phase=CASE WHEN selected IS NULL THEN 'halted' ELSE phase END WHERE id=1")
@@ -703,6 +717,7 @@ class ResumableAuthority(EpochAuthority):
 
     def logical_close(self, epoch, transition_id):
         def action(db,run):
+            if self._retention_state(db,run)['terminal']:raise AuthorityDenied('retention_terminal')
             unknown=self._abandon(db)
             db.execute('UPDATE domain_control SET closed=1 WHERE id=1')
             return dict(status='closed',physical_cleanup='not_attested',unknown_batches=unknown)
@@ -719,8 +734,11 @@ class ResumableAuthority(EpochAuthority):
         try:
             with closing(self._connect(readonly=True)) as db:
                 db.execute('BEGIN');self._read_identity(db);self._meta(db)
-                return dict(run=dict(db.execute('SELECT * FROM run WHERE id=1').fetchone()),
-                    meta=dict(self._meta(db)),control=dict(db.execute('SELECT * FROM domain_control WHERE id=1').fetchone()))
+                run=db.execute('SELECT * FROM run WHERE id=1').fetchone()
+                result=dict(run=dict(run),meta=dict(self._meta(db)),control=dict(db.execute('SELECT * FROM domain_control WHERE id=1').fetchone()))
+                retention=self._retention_state(db,run)
+                if retention['enabled']:result['retention']=retention
+                return result
         except AuthorityDenied:raise
         except BaseException:
             self._failed=True;raise AuthorityUnavailable() from None
