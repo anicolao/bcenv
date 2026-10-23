@@ -272,7 +272,7 @@ class EpochAuthority:
             prior = db.execute('SELECT digest FROM receipts WHERE id=?', (tid,)).fetchone()
             if prior:
                 raise AuthorityDenied('duplicate_request' if prior[0] == digest else 'identity_conflict')
-            if db.execute('SELECT COUNT(*) FROM receipts').fetchone()[0] >= MAX_RECEIPTS:
+            if db.execute('SELECT COUNT(*) FROM receipts').fetchone()[0] >= getattr(self, 'receipt_limit', MAX_RECEIPTS):
                 raise AuthorityDenied('receipt_limit')
             response = action(db, row)
             observed = dict(row, last_wall=first_clock.wall, last_mono=first_clock.mono)

@@ -15,16 +15,27 @@ import time
 
 from runtime.artifacts import digest, write
 from services import local_trial
+from runtime.cancellation import cancelled
 from services.operator_stop import validate_control_args, SCHEMA as STOP_SCHEMA, MAX_BYTES as STOP_MAX_BYTES, POLL_SECONDS, JOIN_SECONDS
 
 MAX_LOG = 65536
 
 
-def probe(command, output, timeout=30):
+def probe(command, output, timeout=30, *, deadline_monotonic=None, cancel_fd=None):
     """Same inherited environment/cwd as AdapterWorker, bounded diagnostic pipe."""
     start = time.monotonic()
     result = {'command': command + ['--help'], 'status': 'failed', 'exit_code': None}
+    def stop_reason():
+        if cancelled(cancel_fd):
+            return 'cancelled'
+        if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            return 'timeout'
+        return None
     with Path(output).open('xb') as log:
+        reason = stop_reason()
+        if reason is not None:
+            result.update(status=reason, not_started=True, log=str(output), log_sha256=digest(output))
+            return result
         try:
             p = subprocess.Popen(result['command'], stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, start_new_session=True)
@@ -37,8 +48,9 @@ def probe(command, output, timeout=30):
                 with selectors.DefaultSelector() as sel:
                     sel.register(p.stdout, selectors.EVENT_READ)
                     while sel.get_map():
-                        if time.monotonic() - start >= timeout:
-                            status = 'timeout'
+                        reason = stop_reason()
+                        if reason is not None or time.monotonic() - start >= timeout:
+                            status = reason or 'timeout'
                             break
                         for key, _ in sel.select(.05):
                             chunk = os.read(key.fileobj.fileno(), 8192)
@@ -54,7 +66,30 @@ def probe(command, output, timeout=30):
                             break
                     if status is None:
                         try:
-                            p.wait(timeout=max(.001, timeout - (time.monotonic() - start)))
+                            remaining = timeout - (time.monotonic() - start)
+                            if deadline_monotonic is not None:
+                                remaining = min(remaining, deadline_monotonic - time.monotonic())
+                            reason = stop_reason()
+                            if reason is not None:
+                                status = reason
+                            elif cancel_fd is None:
+                                p.wait(timeout=max(.001, remaining))
+                            else:
+                                # stdout EOF is not process exit. Keep observing
+                                # cancellation without changing the legacy wait.
+                                while True:
+                                    reason = stop_reason()
+                                    remaining = timeout - (time.monotonic() - start)
+                                    if deadline_monotonic is not None:
+                                        remaining = min(remaining, deadline_monotonic - time.monotonic())
+                                    if reason is not None or remaining <= 0:
+                                        status = reason or 'timeout'
+                                        break
+                                    try:
+                                        p.wait(timeout=min(.05, remaining))
+                                        break
+                                    except subprocess.TimeoutExpired:
+                                        continue
                         except subprocess.TimeoutExpired:
                             status = 'timeout'
             finally:
