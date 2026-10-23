@@ -133,3 +133,49 @@ the overall test process exit code. This inventory is candidate-authored evidenc
 for review, not machine-verified coverage or a trusted correctness oracle. The
 helper does not count assertion syntax, validate claim inventories, generate test
 scenarios, or supply bot strategy.
+
+## Local failure evidence and prospective stopping policy
+
+Local checks are development experiments, not scrimmage admissions or final
+validation. An ordinary compile rejection, assertion failure, or local timeout
+need not by itself terminate a future trial **if** the fixed prospective protocol
+allows revision, the operation has a retained terminal result, owned direct-child
+cleanup is positively evidenced, and there is no uncertain accepted service effect.
+The author may choose a supported revision or distinct local diagnostic within the
+same clock and unchanged helper limits. Preserve the failed attempt. Do not
+blindly repeat the identical timed-out operation, erase failures, or treat more
+waiting time as a correctness fix. No extra operator acknowledgement is required
+for each ordinary, fully observed local failure.
+
+A receipt containing `execution_error`, `cleanup_failed` or `launch_error` is a
+helper/infrastructure error, not an ordinary compiler rejection; positive child
+cleanup alone does not turn it into a usable local experiment. Stop and report it.
+An interrupted/BaseException path may produce no terminal receipt and does not
+claim that every cleanup stage completed. Treat that as unknown, not permission
+to continue.
+
+Stop on unknown child/helper ownership or terminal outcome, uncertain service
+requests, service infrastructure_failure/run_halted, or deadline expiry. UNKNOWN
+scrimmage jobs and incomplete validation retain their no-retry/no-substitution
+rules. This distinction is prospective: it does not reopen a stopped experiment,
+authorize a replacement author, modify source strategy, or change any budget.
+
+A bounded local `output_limit` result is also a failed local experiment, not an
+implicit helper/infrastructure failure, provided the same positive wait/cleanup,
+external helper terminal and no-uncertain-service-effect conditions hold. Preserve
+the truncated log and limit result; the output cap is unchanged and is not bypassed.
+
+Local phase receipts retain requested timeout, effective compiler/JVM command and
+owned cleanup observations. Caller invocation/options are separate from the
+injected heap-bounded command. A successful direct-child wait is positive evidence;
+exit -9 or a `timeout` status alone is not. The helper's prepared-return receipt is
+written before it exits and **cannot prove its own future process exit**. Retain
+the actual tool/helper terminal observation as well. A normal scrimmage-service
+stop is not evidence about a separate local helper. Group cleanup is cooperative
+owned-process cleanup, not arbitrary-descendant or kernel containment.
+
+The default remains30 seconds per phase, explicit range1–120; heap256MiB and
+64KiB output limits are unchanged. Local checks do not inherit the service's120s
+build limit or absolute deadline; candidate work remains governed by the original
+trial wall clock. Tests still establish only observed execution/assertion evidence,
+not game semantics or general correctness. No automatic retry is introduced.
