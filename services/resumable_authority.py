@@ -16,6 +16,7 @@ from services.scrimmage import accept_source_zip, SubmissionRejected
 from services.replay_feedback_v2 import ReplayPageQuery
 
 PROFILE = 'resumable-v1'
+TRANSFER_PROFILE = 'public-transfer-v1'
 SCHEMA = 'bcenv.resumable.v1'
 DOMAIN_VERSION = 1
 MAX_PUBLIC = 60000
@@ -144,10 +145,17 @@ class ResumableAuthority(EpochAuthority):
 
     @classmethod
     def create(cls, path, *, profile=PROFILE, config, author, paths, clock, duration=21600, limits=None):
-        if profile != PROFILE:
+        if profile not in (PROFILE, TRANSFER_PROFILE):
             raise AuthorityDenied('invalid_profile')
+        if profile == TRANSFER_PROFILE:
+            trial=config.get('trial') if type(config) is dict else None
+            if type(trial) is not dict:raise AuthorityDenied('invalid_transfer_configuration')
+            games=trial.get('transfer_games')
+            if (trial.get('profile') != TRANSFER_PROFILE or type(games) is not list or len(games)!=8 or
+                    trial.get('transfer_schedule_sha256') != _hash(games)):
+                raise AuthorityDenied('invalid_transfer_configuration')
         obj = super().create(path, profile=CORE_PROFILE,
-            config=dict(config, domain_profile=PROFILE), author=author, paths=paths,
+            config=dict(config, domain_profile=profile), author=author, paths=paths,
             clock=clock, duration=duration, limits=limits)
         try:
             with closing(obj._connect()) as db:
@@ -156,11 +164,18 @@ class ResumableAuthority(EpochAuthority):
                     db.execute(statement)
                 db.execute("INSERT INTO domain_meta VALUES(1,?,'training',0,'[]','{}',NULL,NULL,NULL)", (DOMAIN_VERSION,))
                 db.execute('INSERT INTO domain_control VALUES(1,0,0,0)')
+                if profile == TRANSFER_PROFILE:
+                    db.execute('CREATE TABLE domain_transfers (batch TEXT PRIMARY KEY REFERENCES domain_batches(id), '
+                               'effect TEXT NOT NULL UNIQUE, original_manifest_sha256 TEXT NOT NULL)')
                 db.commit()
         except BaseException:
             obj._failed = True
             raise AuthorityUnavailable('domain_initialization_unknown') from None
         return obj
+
+    @staticmethod
+    def _profile(run):
+        return json.loads(run['config'])['config'].get('domain_profile', PROFILE)
 
     @staticmethod
     def _meta(db):
@@ -188,6 +203,13 @@ class ResumableAuthority(EpochAuthority):
         return row
 
     @staticmethod
+    def _transfer_pins(batch):
+        if batch['phase']!='transfer':return {}
+        result=json.loads(batch['response'])
+        return {key:result[key] for key in ('original_submission_id','source_sha256','package',
+            'build_identity_sha256','transfer_schedule_sha256','transfer_effect_sha256')}
+
+    @staticmethod
     def _source(db, prepared):
         source, archive = prepared['source'], prepared['archive']
         old = db.execute('SELECT * FROM domain_sources WHERE fingerprint=?', (source.content_sha256,)).fetchone()
@@ -206,15 +228,31 @@ class ResumableAuthority(EpochAuthority):
         counters = {r['name']: r['used'] for r in db.execute('SELECT * FROM counters')}
         observed = self._clock_check(run)
         remaining = max(0., min(run['mono_deadline']-observed.mono, run['wall_deadline']-observed.wall))
-        return dict(schema=SCHEMA, status='validation_status', phase=meta['phase'], halted=bool(meta['halted']),
+        response = dict(schema=SCHEMA, status='validation_status', phase=meta['phase'], halted=bool(meta['halted']),
             finalists=json.loads(meta['finalists']), validation_ids=json.loads(meta['validation_ids']),
             provisional_choice=meta['provisional'], final_choice=meta['selected'],
             deadline_monotonic=run['mono_deadline'], deadline_unix=run['wall_deadline'],
             started_monotonic=run['mono_start'], started_unix=run['wall_start'],
-            max_run_seconds=run['mono_deadline']-run['mono_start'], remaining_seconds=remaining, profile=PROFILE,
+            max_run_seconds=run['mono_deadline']-run['mono_start'], remaining_seconds=remaining, profile=self._profile(run),
             training_games_attempted=counters['training_games'], validation_games_attempted=counters['validation_games'],
             games_attempted=counters['training_games']+counters['validation_games'],
             usage=counters, epoch=run['epoch'])
+        if self._profile(run)==TRANSFER_PROFILE:
+            admitted={r['phase']:r['n'] for r in db.execute(
+                'SELECT b.phase,count(*) AS n FROM domain_games g JOIN domain_batches b ON g.batch=b.id '
+                'WHERE g.admitted=1 GROUP BY b.phase')}
+            training_admitted=admitted.get('training',0)+admitted.get('transfer',0)
+            validation_admitted=admitted.get('validation',0)
+            response.update(training_games_attempted=training_admitted,
+                validation_games_attempted=validation_admitted,
+                games_attempted=training_admitted+validation_admitted,
+                training_games_debited=counters['training_games'],
+                physical_launches='not_attested',
+                transfer_slots_used=db.execute('SELECT count(*) FROM domain_transfers').fetchone()[0],
+                transfer_slots_limit=2, transfer_games_reserved=8*db.execute('SELECT count(*) FROM domain_transfers').fetchone()[0],
+                transfer_games_admitted=db.execute("SELECT count(*) FROM domain_games g JOIN domain_transfers t ON g.batch=t.batch WHERE g.admitted=1").fetchone()[0],
+                training_games_accounting='ordinary admitted games plus transfer reserved games; not physical launches')
+        return response
 
     def request(self, epoch, request_id, body, *, attempt_id=None, prepared=None):
         """Commit charged ingress/response; returned work is trusted-only, once.
@@ -251,6 +289,7 @@ class ResumableAuthority(EpochAuthority):
                 return dict(response=response, work=None, duplicate=True)
             op = body.get('operation') if type(body) is dict else None
             reading = op not in ('note', 'submit', 'lock_finalists', 'select_finalist', 'checkpoint')
+            if op=='transfer' and self._profile(run)==TRANSFER_PROFILE:reading=False
             denial = None
             if reading:
                 try:
@@ -344,6 +383,46 @@ class ResumableAuthority(EpochAuthority):
             db.execute('UPDATE domain_notes SET used=1 WHERE id=?',(note['id'],))
             db.execute('INSERT INTO domain_batches(id,epoch,phase,original,source,state,response) VALUES(?,?,?,?,?,?,?)',(sid,run['epoch'],'training',sid,source,'QUEUED',_json(response)))
             return response,dict(kind='batch',id=sid)
+        if op == 'transfer' and self._profile(run)==TRANSFER_PROFILE:
+            if set(body)!={'operation','submission_id','note_id','note_sha256'}:
+                raise AuthorityDenied('invalid_request')
+            if meta['phase']!='training':raise AuthorityDenied('training_closed')
+            original=self._batch(db,body['submission_id'])
+            if (original['phase']!='training' or original['original']!=original['id'] or
+                    original['state']!='COMPLETE' or not original['manifest']):
+                raise AuthorityDenied('invalid_transfer_original')
+            if prepared.get('verified_manifests')!={original['id']:original['manifest_sha256']}:
+                raise AuthorityDenied('transfer_evidence_unverified')
+            binding=json.loads(original['response']).get('build_identity_sha256')
+            if type(binding) is not str:raise AuthorityDenied('transfer_evidence_unverified')
+            _sha(binding)
+            source=db.execute('SELECT package FROM domain_sources WHERE fingerprint=?',(original['source'],)).fetchone()
+            config=json.loads(run['config'])['config']['trial'];schedule=config['transfer_schedule_sha256']
+            effect=_hash(dict(source_sha256=original['source'],package=source['package'],schedule_sha256=schedule))
+            if db.execute('SELECT 1 FROM domain_transfers WHERE effect=?',(effect,)).fetchone():
+                raise AuthorityDenied('transfer_effect_used')
+            if db.execute('SELECT count(*) FROM domain_transfers').fetchone()[0]>=2:
+                raise AuthorityDenied('transfer_limit')
+            if db.execute("SELECT count(*) FROM domain_batches WHERE state IN ('QUEUED','RUNNING')").fetchone()[0]>=2:
+                raise AuthorityDenied('submission_limit')
+            if type(body['note_id']) is not str or type(body['note_sha256']) is not str:raise AuthorityDenied('invalid_note')
+            note=db.execute('SELECT * FROM domain_notes WHERE id=?',(body['note_id'],)).fetchone()
+            if note is None:raise AuthorityDenied('unknown_note')
+            if note['used']:raise AuthorityDenied('note_already_used')
+            if note['source']!=original['source'] or note['digest']!=body['note_sha256']:raise AuthorityDenied('note_mismatch')
+            self._debit(db,'versions');self._debit(db,'training_games',8)
+            sid='s_'+uuid.uuid4().hex
+            response=dict(schema=SCHEMA,status='accepted',submission_id=sid,phase='transfer',
+                original_submission_id=original['id'],source_sha256=original['source'],package=source['package'],
+                build_identity_sha256=binding,transfer_schedule_sha256=schedule,transfer_effect_sha256=effect,
+                note_id=note['id'],note_sha256=note['digest'],training_games_reserved=8)
+            db.execute('INSERT INTO domain_batches(id,epoch,phase,original,source,state,response) VALUES(?,?,?,?,?,?,?)',
+                (sid,run['epoch'],'transfer',original['id'],original['source'],'QUEUED',_json(response)))
+            db.execute('INSERT INTO domain_transfers VALUES(?,?,?)',(sid,effect,original['manifest_sha256']))
+            db.executemany("INSERT INTO domain_games(batch,game_index,epoch,state) VALUES(?,?,?,'RESERVED')",
+                [(sid,index,run['epoch']) for index in range(8)])
+            db.execute('UPDATE domain_notes SET used=1 WHERE id=?',(note['id'],))
+            return response,dict(kind='batch',id=sid)
         if op == 'lock_finalists':
             if set(body)!={'operation','submission_ids','provisional_choice'} or meta['phase']!='training':raise AuthorityDenied('finalists_locked')
             ids=body['submission_ids']
@@ -381,7 +460,7 @@ class ResumableAuthority(EpochAuthority):
             if db.execute("SELECT 1 FROM domain_replays WHERE fingerprint=? AND state='UNKNOWN'",(fingerprint,)).fetchone():raise AuthorityDenied('unknown_fingerprint')
             self._debit(db,'replays');replay_id='q_'+uuid.uuid4().hex
             db.execute('INSERT INTO domain_replays VALUES(?,?,?,?,?,?,?,?,NULL)',(replay_id,run['epoch'],fingerprint,batch['id'],index,_json(normalized_query),rid,'RUNNING'))
-            return dict(schema=SCHEMA,status='replay_pending',replay_id=replay_id),dict(kind='replay',id=replay_id)
+            return dict(schema=SCHEMA,status='replay_pending',replay_id=replay_id,**self._transfer_pins(batch)),dict(kind='replay',id=replay_id)
         raise AuthorityDenied('invalid_request')
 
     def start_batch(self, epoch, transition_id, sid):
@@ -402,7 +481,8 @@ class ResumableAuthority(EpochAuthority):
             if self._meta(db)['halted'] or db.execute('SELECT closed FROM domain_control WHERE id=1').fetchone()[0] or row['epoch']!=epoch or row['state']!='RUNNING':raise AuthorityDenied('batch_not_running')
             existing=db.execute('SELECT state FROM domain_games WHERE batch=? AND game_index=?',(sid,index)).fetchone()
             if existing and existing['state']!='RESERVED':raise AuthorityDenied('game_already_admitted')
-            self._debit(db,'validation_games' if row['phase']=='validation' else 'training_games')
+            if row['phase']!='transfer':
+                self._debit(db,'validation_games' if row['phase']=='validation' else 'training_games')
             if existing:
                 db.execute("UPDATE domain_games SET state='ADMITTED',admitted=1 WHERE batch=? AND game_index=?",(sid,index))
             else:
@@ -415,6 +495,8 @@ class ResumableAuthority(EpochAuthority):
         manifest_encoded=manifest_json(manifest) if manifest is not None else None
         manifest=json.loads(manifest_encoded) if manifest_encoded is not None else None
         manifest_sha=hashlib.sha256(manifest_encoded.encode()).hexdigest() if manifest_encoded is not None else None
+        build_sha=(manifest_digest(manifest['build_identity']) if type(manifest) is dict and
+                   type(manifest.get('build_identity')) is dict and manifest['build_identity'] else None)
         if result.get('status') not in ('complete','rejected','infrastructure_failure'):raise AuthorityDenied('invalid_result')
         def action(db,run):
             row=self._batch(db,sid)
@@ -427,10 +509,15 @@ class ResumableAuthority(EpochAuthority):
                 indices=[r[0] for r in db.execute('SELECT game_index FROM domain_games WHERE batch=? AND admitted=1 ORDER BY game_index',(sid,))]
                 if row['state']!='RUNNING' or indices!=list(range(8)) or type(games) is not list or len(games)!=8 or any(g.get('status')!='completed' for g in games) or not manifest:raise AuthorityDenied('invalid_complete_evidence')
                 if manifest.get('source_sha256')!=row['source']:raise AuthorityDenied('source_mismatch')
+                if row['phase']=='transfer' and build_sha!=json.loads(row['response'])['build_identity_sha256']:
+                    raise AuthorityDenied('transfer_build_mismatch')
             response=dict(json.loads(row['response']),**result)
             # Worker evidence cannot replace canonical source/ID/note bindings.
             for key,value in json.loads(row['response']).items():
                 if key not in ('status',):response[key]=value
+            if self._profile(run)==TRANSFER_PROFILE and status=='complete' and row['phase']!='transfer':
+                if build_sha is None:raise AuthorityDenied('build_identity_missing')
+                response['build_identity_sha256']=build_sha
             public_json(response)
             state={'complete':'COMPLETE','rejected':'REJECTED','infrastructure_failure':'FAILED'}[status]
             db.execute('UPDATE domain_batches SET state=?,response=?,manifest=?,manifest_sha256=? WHERE id=?',(state,_json(response),manifest_encoded,manifest_sha,sid))
@@ -464,7 +551,11 @@ class ResumableAuthority(EpochAuthority):
                 if type(feedback) is not dict or feedback.get('submission_id')!=batch['id']:raise AuthorityDenied('invalid_feedback')
                 reference=dict(reference_id='r_'+uuid.uuid4().hex,submission_id=batch['id'],game_index=index,source_sha256=batch['source'],replay_sha256=result['games'][index]['replay_sha256'],query=json.loads(replay['query']),feedback_sha256=_hash(feedback),phase=batch['phase'],original_submission_id=batch['original'])
                 response=dict(schema=SCHEMA,status='replay',submission_id=batch['id'],game_index=index,source_sha256=batch['source'],replay_sha256=reference['replay_sha256'],feedback=feedback,replay_reference=reference,phase=batch['phase'],original_submission_id=batch['original'])
+                if batch['phase']=='transfer':
+                    pins={key:result[key] for key in ('package','build_identity_sha256','transfer_schedule_sha256','transfer_effect_sha256')}
+                    reference.update(pins);response.update(pins)
                 db.execute('INSERT INTO domain_references VALUES(?,?)',(reference['reference_id'],_json(reference)));state='COMPLETE'
+            response.update(self._transfer_pins(self._batch(db,replay['batch'])))
             public_json(response)
             db.execute('UPDATE domain_replays SET state=?,response=? WHERE id=?',(state,_json(response),replay_id))
             # Terminal receipt is separate. Original ingress/admission is immutable;
@@ -485,7 +576,8 @@ class ResumableAuthority(EpochAuthority):
             db.execute("UPDATE domain_batches SET state='UNKNOWN',response=? WHERE id=?",(_json(response),row['id']));unknown+=1
         db.execute("UPDATE domain_games SET state='UNKNOWN' WHERE state IN ('RESERVED','ADMITTED')")
         for replay in db.execute("SELECT * FROM domain_replays WHERE state='RUNNING'").fetchall():
-            response=dict(schema=SCHEMA,status='error',reason='interrupted_unknown',unscored=True)
+            response=dict(schema=SCHEMA,status='error',reason='interrupted_unknown',unscored=True,
+                          **self._transfer_pins(self._batch(db,replay['batch'])))
             db.execute("UPDATE domain_replays SET state='UNKNOWN',response=? WHERE id=?",(_json(response),replay['id']))
         meta=self._meta(db)
         if meta['phase'] in ('locked','validation'):

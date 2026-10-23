@@ -24,6 +24,7 @@ from services.resumable_authority import prepare
 from services.storage_guard import _open_directory, _scan_directory
 
 PROFILE = 'resumable-v1'
+TRANSFER_PROFILE = 'public-transfer-v1'
 MAX_MANIFEST = 1048576
 MAX_EVIDENCE = 65536
 MAX_STORAGE = 1073741824
@@ -63,14 +64,17 @@ def publish(path, value):
 
 def fixed_inputs(config):
     """Hash trusted public schedule/config outside every authoritative transaction."""
-    if (type(config) is not dict or set(config) != {'profile','command','games','validation_games','timeout','match_timeout'} or
-            config['profile'] != PROFILE or config['timeout'] != 120 or config['match_timeout'] != 300 or
+    base_keys = {'profile','command','games','validation_games','timeout','match_timeout'}
+    transfer = type(config) is dict and config.get('profile') == TRANSFER_PROFILE
+    expected_keys = base_keys | ({'transfer_games','transfer_schedule_sha256','transfer_selection'} if transfer else set())
+    if (type(config) is not dict or set(config) != expected_keys or
+            config['profile'] not in (PROFILE, TRANSFER_PROFILE) or config['timeout'] != 120 or config['match_timeout'] != 300 or
             type(config['command']) is not list or len(config['command']) != 1 or
             not Path(config['command'][0]).is_absolute()):
         raise ValueError('invalid_resumable_config')
     schedules = []
     files = {config['command'][0]: digest(config['command'][0])}
-    for key in ('games','validation_games'):
+    for key in ('games','validation_games') + (('transfer_games',) if transfer else ()):
         games = tuple(DevelopmentGame(**g) for g in config[key])
         cells = {(str(Path(g.opponent_build).resolve()), str(Path(g.map_path).resolve()), g.own_slot) for g in games}
         if (len(games) != 8 or len(cells) != 8 or len({g.label for g in games}) != 8 or
@@ -88,6 +92,22 @@ def fixed_inputs(config):
     if ({x[0] for x in schedules[0]} != {x[0] for x in schedules[1]} or
             {x[1] for x in schedules[0]} & {x[1] for x in schedules[1]}):
         raise ValueError('invalid_schedule')
+    if transfer:
+        if (config['transfer_schedule_sha256'] != hashlib.sha256(canonical(config['transfer_games'])).hexdigest() or
+                {x[0] for x in schedules[0]} != {x[0] for x in schedules[2]} or
+                {x[1] for x in schedules[2]} & {x[1] for cells in schedules[:2] for x in cells}):
+            raise ValueError('invalid_transfer_schedule')
+        selection = config['transfer_selection']
+        if (type(selection) is not dict or set(selection) != {'path','sha256'} or
+                type(selection['path']) is not str or not Path(selection['path']).is_absolute()):
+            raise ValueError('invalid_transfer_selection')
+        from services.public_transfer_maps import validate_selection
+        selected = validate_selection(selection['path'], selection['sha256'], {
+            'training': sorted({g['map_path'] for g in config['games']}),
+            'validation': sorted({g['map_path'] for g in config['validation_games']})})
+        if {str(Path(p).resolve()) for p in selected} != {x[1] for x in schedules[2]}:
+            raise ValueError('transfer_selection_schedule_mismatch')
+        files[selection['path']] = digest(selection['path'])
     return files
 
 
@@ -225,7 +245,7 @@ class ResumableTrial:
         self.workers = []
         self.executor = None
         try:
-            for key in ('games','validation_games'):
+            for key in ('games','validation_games') + (('transfer_games',) if self.config['profile'] == TRANSFER_PROFILE else ()):
                 worker = worker_factory(self.config['command'], tuple(DevelopmentGame(**g) for g in self.config[key]),
                                         120, match_timeout=300)
                 worker.stop_requested = self.stop_requested
@@ -315,6 +335,11 @@ class ResumableTrial:
                 prepared['verified_manifests'] = self._verified(ids)
             except (OSError, ValueError, KeyError, TypeError, AuthorityDenied):
                 prepared['error'] = 'evidence_unverified'
+        if op == 'transfer' and self.config['profile'] == TRANSFER_PROFILE and not prepared.get('error'):
+            try:
+                prepared['verified_manifests'] = self._verified([body.get('submission_id')])
+            except (OSError, ValueError, KeyError, TypeError, AuthorityDenied):
+                prepared['error'] = 'evidence_unverified'
         admitted = self.authority.request(self.epoch, request_id, body, prepared=prepared,
                                           attempt_id=identifier('ingress'))
         work = admitted['work']
@@ -343,8 +368,8 @@ class ResumableTrial:
                 batch = self.authority.batch(sid)
                 root = self.artifacts/sid
                 root.mkdir(exist_ok=False)
-                worker = self.workers[batch['phase']=='validation']
-                if batch['phase']=='validation':
+                worker = self.workers[{'training': 0, 'validation': 1, 'transfer': 2}[batch['phase']]]
+                if batch['phase'] in ('validation', 'transfer'):
                     original = self.authority.batch(batch['original'])
                     manifest = json.loads(original['manifest'])
                     checked_manifest(self.artifacts/original['id'], manifest)
@@ -379,7 +404,7 @@ class ResumableTrial:
             checked_manifest(self.artifacts/batch['id'], json.loads(batch['manifest']))
             q = json.loads(replay['query']); mode = q.get('mode','actions')
             query = ReplayPageQuery(**{k:v for k,v in q.items() if k!='mode'})
-            worker = self.workers[batch['phase']=='validation']
+            worker = self.workers[{'training': 0, 'validation': 1, 'transfer': 2}[batch['phase']]]
             result = json.loads(batch['response'])
             feedback = worker.replay(self.artifacts/batch['id'], batch['id'], replay['game_index'], query,
                                      result['games'][replay['game_index']]['replay_sha256'], mode=mode)
