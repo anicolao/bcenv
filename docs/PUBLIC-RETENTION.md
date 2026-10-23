@@ -43,3 +43,35 @@ The exporter independently limits a logical artifact to 64 MiB, chunks to 1 MiB 
 Each exported checkpoint is self-contained for its explicit evidence selection; it does not silently merge a prior checkpoint or reconstruct omitted files. Repeated identical chunks are identical Git blobs and count once in reachable-history accounting even when referenced by multiple checkpoint paths. A prospective operator must include all evidence required by that checkpoint contract (or explicitly reference separately retained older checkpoints in its external run inventory). The exporter never decides that a large required artifact may be omitted to fit a cap. The opt-in authority enforces the 28-set ceiling and admission boundary; non-opt-in uses of the standalone toolkit do not acquire those guarantees.
 
 The consistent evidence snapshot includes a strictly typed retention history (at most 28 sets): stable descriptors, their verified effect payloads, prior ACK bindings, sticky failures and terminal superseded-gap/lifecycle observations. It does not dump arbitrary SQL JSON. The snapshot naturally precedes its own publication/ACK; that final ACK is not falsely claimed to be inside the very commit it acknowledges. Its remote commit and returned path-free operator receipt remain separate observations. The terminal lifecycle input is a trusted assertion bound to retained evidence hashes, not a kernel proof that arbitrary descendants are dead.
+
+## Public synthetic roundtrip checkpoint (2026-10-23)
+
+The separately authorized second synthetic case completed normally (exit0) in
+about78.6 seconds:223 bounded Git calls, two commits and two pushes, with no engine,
+real game, service worker or native author. The initial checkpoint is public commit
+[`26b44ded58c447c731285f146d10b487c1d06813`](https://github.com/anicolao/bcenv-artifacts/commit/26b44ded58c447c731285f146d10b487c1d06813);
+the post-synthetic-batch checkpoint is
+[`116c9172f355e2d726ed51ac30ccd5e58ffee958`](https://github.com/anicolao/bcenv-artifacts/commit/116c9172f355e2d726ed51ac30ccd5e58ffee958).
+Exact remote readback preceded the corresponding trusted ACK. The fixture preserved
+one synthetic eight-cell batch and all eight admission debits; these were not executed games.
+Evidence-only restore verified four selected files containing source/note/synthetic
+replay evidence. It did not restore active source, runnable service authority,
+uncommitted work or a native author. Bounded replay projections remain pure-test
+coverage, not this actual case. No third publication or terminal-retention path was
+exercised; logical close is not physical-cleanup or arbitrary-descendant proof.
+
+The first case remains preserved as failed/unknown: its sole push exited128, no ACK
+was recorded and no synthetic work was admitted. The remote remained at the prior
+initialization commit. That runner lacked the explicit credential-helper invocation
+used by successful publication; this is a concrete invocation difference, not a
+proven root cause because stderr was discarded. The second case was separately
+preregistered, not a resend or recovery of the first uncertain assignment.
+Neither case reconstructs missing015–017 evidence or establishes trial continuity,
+competence, live terminal retention or indefinite provider durability. Only public
+synthetic/engineering payload was published; private evaluator material is excluded.
+
+Independent actual-case review SHA256
+`181ef9cf28bd70f949a16eae7cdf323a4fd03ee8f4046476819f8f34a6e474fa`
+binds the retained observations. The second archived snapshot is pre-ACK PENDING;
+its later ACK and terminal logical close are separately local, not retroactively
+inside that commit. This self-reference limit is deliberate and remains visible.

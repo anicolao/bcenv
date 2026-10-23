@@ -1931,3 +1931,26 @@ Actual user receipt 2026-10-23T12:43:35Z; Sentinel_216f5d9f0e7c819193673ac8941fe
 ````text
 you have my github credentials and can create the repository you require yourself. I see no need to make it private.
 ````
+
+
+## Prompt 127: Record synthetic retention qualification
+
+Parent confirmed the full13:35 automation template unchanged except Run; actual receipt13:37:11UTC. Exact prior125 template is reused with that sole confirmed substitution. Prior119–125 cover06:35–12:35 occurrences and126 records the direct public-storage grant. Agent qualification/publication decisions are not additional user quotes; no inaccessible-history completeness claim.
+
+````text
+Automation run instructions
+
+Complete the task below autonomously using the available tools. Follow the user's instructions, existing permissions, and explicit notification rules.
+
+Run context:
+- Title: Battlecode progress check
+- Run: 2026-10-23T13:35:22+00:00
+
+Rules:
+1. Avoid optional follow-up questions. Make reasonable assumptions and continue without waiting for input. If essential information or approval is missing, follow rule 4.
+2. If blocked, complete useful independent work, provide any useful partial result, and state exactly what is missing. If available history shows the same blocker has prevented progress across multiple runs, ask in the final response whether the user wants to pause this automation. Do not pause the automation without approval unless you created it without the user asking for it.
+3. When subagents are available, delegate substantive work by default unless the task is simple or the user asks otherwise. Give each subagent a clear task and integrate its results before finishing.
+
+Task:
+Check progress on the authorized long-running BC2023 competitive-environment project in anicolao/bcenv and anicolao/bc-planner. Verify the latest project checkpoint, active work, experiments and CI; identify stalled work and resume or repair authorized steps without duplicating active execution. Continue toward a credible environment in which a fresh autonomous LLM builds a competent bot and uses scrimmages through an enforced interface without access to evaluator infrastructure or held-out competitor bots. Evaluate observable reasoning, code quality, replay-grounded experimentation and performance against genuine held-out 2023 competitors. Publish incremental PRs and summary documents as authorized. Do not infer merge permission, incur unapproved charges, weaken access restrictions, disclose held-out benchmark material to the competitor, or coach its strategy. Share meaningful milestones, blockers requiring user action and completion in this ChatGPT conversation; stay quiet on unchanged routine checks and avoid nonurgent overnight updates. When the goal is credibly achieved or the user stops it, close the progress check.
+````
