@@ -127,7 +127,7 @@ def run_assignment(expected, invocation_dir, *, validate_expected, validate_inpu
         result = json.loads(result_bytes)
         if completed.returncode == 0 and result.get('status') == 'completed':
             # Ordinary terminal-replay validation remains mandatory separately.
-            return {'status': 'completed_unscored', 'result_sha256': hashlib.sha256(result_bytes).hexdigest()}
+            return {'status': 'completed_unscored', 'outer_wait_monotonic': waited, 'result_sha256': hashlib.sha256(result_bytes).hexdigest()}
         evidence = {k: expected[k] for k in ('assignment_id', 'index', 'debit_id', 'runtime_identity', 'command')}
         evidence.update(result_bytes=result_bytes, ack_bytes=ack_bytes,
                         outer_wait_completed=True, outer_returncode=completed.returncode,

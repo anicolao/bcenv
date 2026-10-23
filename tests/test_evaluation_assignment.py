@@ -126,7 +126,7 @@ class IntegrationTests(unittest.TestCase):
             result=run_assignment(e,directory,validate_expected=lambda *a,**kw:None,validate_inputs=lambda *a:True,validate_artifacts=lambda *a:True,
                 publish_censored=lambda *a,**kw:self.fail('must not censor'),
                 run=self.fake_run(directory,code=0,status='completed'),clock=lambda:10)
-            self.assertEqual(result['status'],'completed_unscored')
+            self.assertEqual(result['status'],'completed_unscored');self.assertEqual(result['outer_wait_monotonic'],10)
 
 
 if __name__=='__main__': unittest.main()
